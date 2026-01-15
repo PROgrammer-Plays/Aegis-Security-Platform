@@ -1,2 +1,10 @@
-"node_modules/" 
-".env" 
+# Ignore environment variables file
+.env
+.joblib
+# It's also a good idea to ignore other common files
+# For Python:
+__pycache__/
+*.pyc
+
+# For Node.js (if you're in the backend folder):
+node_modules/

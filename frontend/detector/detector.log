@@ -1,0 +1,477 @@
+2026-01-13 20:16:09,771 - absl - WARNING - Compiled the loaded model, but the compiled metrics have yet to be built. `model.compile_metrics` will be empty until you train or evaluate the model.
+2026-01-13 20:16:09,788 - __main__ - INFO - --- Analyzing Network Flow with Traffic Engine ---
+2026-01-13 20:16:10,188 - __main__ - INFO - Alert generated: {
+  "engine": "Traffic Engine",
+  "severity": "Medium",
+  "alertType": "Anomalous Network Flow",
+  "details": {
+    "reconstruction_error": 0.1795004121477477,
+    "anomaly_threshold": 0.00076731,
+    "flow_details": {
+      "ACKFlagCount": 1.0,
+      "ActiveMax": 0.0,
+      "ActiveMean": 0.0,
+      "ActiveStd": 0.0,
+      "AvgBwdSegmentSize": 5800.5,
+      "AvgFwdSegmentSize": 6.5,
+      "AvgPacketSize": 1937.8333740234375,
+      "BwdAvgBulkRate": 0.0,
+      "BwdAvgBytesBulk": 0.0,
+      "BwdAvgPacketsBulk": 0.0,
+      "BwdHeaderLength": 40.0,
+      "BwdIATMax": 3090.0,
+      "BwdIATMean": 3090.0,
+      "BwdIATMin": 3090.0,
+      "BwdIATStd": 0.0,
+      "BwdIATTotal": 3090.0,
+      "BwdPSHFlags": 0.0,
+      "BwdPacketLengthMax": 11595.0,
+      "BwdPacketLengthMean": 5800.5,
+      "BwdPacketLengthMin": 6.0,
+      "BwdPacketLengthStd": 8194.66015625,
+      "BwdPacketsLengthTotal": 11601.0,
+      "BwdPacketss": 73.61331176757812,
+      "BwdURGFlags": 0.0,
+      "CWEFlagCount": 0.0,
+      "DownUpRatio": 0.0,
+      "ECEFlagCount": 0.0,
+      "FINFlagCount": 0.0,
+      "FlowBytess": 427950.9735,
+      "FlowDuration": 27169.0,
+      "FlowIATMax": 24009.0,
+      "FlowIATMean": 5433.7998046875,
+      "FlowIATMin": 0.0,
+      "FlowIATStd": 10468.4501953125,
+      "FlowPacketss": 220.8399279,
+      "FwdActDataPackets": 2.0,
+      "FwdAvgBulkRate": 0.0,
+      "FwdAvgBytesBulk": 0.0,
+      "FwdAvgPacketsBulk": 0.0,
+      "FwdHeaderLength": 104.0,
+      "FwdIATMax": 24009.0,
+      "FwdIATMean": 8004.0,
+      "FwdIATMin": 0.0,
+      "FwdIATStd": 13860.736328125,
+      "FwdIATTotal": 24012.0,
+      "FwdPSHFlags": 0.0,
+      "FwdPacketLengthMax": 20.0,
+      "FwdPacketLengthMean": 6.5,
+      "FwdPacketLengthMin": 0.0,
+      "FwdPacketLengthStd": 9.433980941772461,
+      "FwdPacketsLengthTotal": 26.0,
+      "FwdPacketss": 147.22662353515625,
+      "FwdSegSizeMin": 20.0,
+      "FwdURGFlags": 0.0,
+      "IdleMax": 0.0,
+      "IdleMean": 0.0,
+      "IdleMin": 0.0,
+      "IdleStd": 0.0,
+      "InitBwdWinBytes": 229.0,
+      "InitFwdWinBytes": 29200.0,
+      "PSHFlagCount": 1.0,
+      "PacketLengthMax": 11595.0,
+      "PacketLengthMean": 1661.0,
+      "PacketLengthMin": 0.0,
+      "PacketLengthStd": 4380.48779296875,
+      "PacketLengthVariance": 19200000.0,
+      "Protocol": 6.0,
+      "RSTFlagCount": 0.0,
+      "SYNFlagCount": 0.0,
+      "SubflowBwdBytes": 11601.0,
+      "SubflowBwdPackets": 2.0,
+      "SubflowFwdBytes": 26.0,
+      "SubflowFwdPackets": 4.0,
+      "TotalBackwardPackets": 2.0,
+      "TotalFwdPackets": 4.0,
+      "URGFlagCount": 0.0
+    }
+  }
+}
+2026-01-13 20:16:10,191 - __main__ - INFO - Attempting to send alert (attempt 1/4)
+2026-01-13 20:25:19,630 - absl - WARNING - Compiled the loaded model, but the compiled metrics have yet to be built. `model.compile_metrics` will be empty until you train or evaluate the model.
+2026-01-13 20:25:19,649 - __main__ - INFO - --- Analyzing Network Flow with Traffic Engine ---
+2026-01-13 20:25:19,880 - __main__ - INFO - Alert generated: {
+  "engine": "Traffic Engine",
+  "severity": "Medium",
+  "alertType": "Anomalous Network Flow",
+  "details": {
+    "reconstruction_error": 0.1795004121477477,
+    "anomaly_threshold": 0.00076731,
+    "flow_details": {
+      "ACKFlagCount": 1.0,
+      "ActiveMax": 0.0,
+      "ActiveMean": 0.0,
+      "ActiveStd": 0.0,
+      "AvgBwdSegmentSize": 5800.5,
+      "AvgFwdSegmentSize": 6.5,
+      "AvgPacketSize": 1937.8333740234375,
+      "BwdAvgBulkRate": 0.0,
+      "BwdAvgBytesBulk": 0.0,
+      "BwdAvgPacketsBulk": 0.0,
+      "BwdHeaderLength": 40.0,
+      "BwdIATMax": 3090.0,
+      "BwdIATMean": 3090.0,
+      "BwdIATMin": 3090.0,
+      "BwdIATStd": 0.0,
+      "BwdIATTotal": 3090.0,
+      "BwdPSHFlags": 0.0,
+      "BwdPacketLengthMax": 11595.0,
+      "BwdPacketLengthMean": 5800.5,
+      "BwdPacketLengthMin": 6.0,
+      "BwdPacketLengthStd": 8194.66015625,
+      "BwdPacketsLengthTotal": 11601.0,
+      "BwdPacketss": 73.61331176757812,
+      "BwdURGFlags": 0.0,
+      "CWEFlagCount": 0.0,
+      "DownUpRatio": 0.0,
+      "ECEFlagCount": 0.0,
+      "FINFlagCount": 0.0,
+      "FlowBytess": 427950.9735,
+      "FlowDuration": 27169.0,
+      "FlowIATMax": 24009.0,
+      "FlowIATMean": 5433.7998046875,
+      "FlowIATMin": 0.0,
+      "FlowIATStd": 10468.4501953125,
+      "FlowPacketss": 220.8399279,
+      "FwdActDataPackets": 2.0,
+      "FwdAvgBulkRate": 0.0,
+      "FwdAvgBytesBulk": 0.0,
+      "FwdAvgPacketsBulk": 0.0,
+      "FwdHeaderLength": 104.0,
+      "FwdIATMax": 24009.0,
+      "FwdIATMean": 8004.0,
+      "FwdIATMin": 0.0,
+      "FwdIATStd": 13860.736328125,
+      "FwdIATTotal": 24012.0,
+      "FwdPSHFlags": 0.0,
+      "FwdPacketLengthMax": 20.0,
+      "FwdPacketLengthMean": 6.5,
+      "FwdPacketLengthMin": 0.0,
+      "FwdPacketLengthStd": 9.433980941772461,
+      "FwdPacketsLengthTotal": 26.0,
+      "FwdPacketss": 147.22662353515625,
+      "FwdSegSizeMin": 20.0,
+      "FwdURGFlags": 0.0,
+      "IdleMax": 0.0,
+      "IdleMean": 0.0,
+      "IdleMin": 0.0,
+      "IdleStd": 0.0,
+      "InitBwdWinBytes": 229.0,
+      "InitFwdWinBytes": 29200.0,
+      "PSHFlagCount": 1.0,
+      "PacketLengthMax": 11595.0,
+      "PacketLengthMean": 1661.0,
+      "PacketLengthMin": 0.0,
+      "PacketLengthStd": 4380.48779296875,
+      "PacketLengthVariance": 19200000.0,
+      "Protocol": 6.0,
+      "RSTFlagCount": 0.0,
+      "SYNFlagCount": 0.0,
+      "SubflowBwdBytes": 11601.0,
+      "SubflowBwdPackets": 2.0,
+      "SubflowFwdBytes": 26.0,
+      "SubflowFwdPackets": 4.0,
+      "TotalBackwardPackets": 2.0,
+      "TotalFwdPackets": 4.0,
+      "URGFlagCount": 0.0
+    }
+  }
+}
+2026-01-13 20:25:19,880 - __main__ - INFO - Attempting to send alert (attempt 1/4)
+2026-01-13 20:31:57,092 - __main__ - INFO - [OK] IDS Model loaded successfully.
+2026-01-13 20:31:57,278 - absl - WARNING - Compiled the loaded model, but the compiled metrics have yet to be built. `model.compile_metrics` will be empty until you train or evaluate the model.
+2026-01-13 20:31:57,302 - __main__ - INFO - [OK] Traffic Engine loaded successfully.
+2026-01-13 20:31:57,302 - __main__ - INFO - --- Analyzing Network Flow with Traffic Engine ---
+2026-01-13 20:31:57,542 - __main__ - WARNING - [ALERT] ANOMALY DETECTED!
+2026-01-13 20:31:57,542 - __main__ - INFO - Alert generated: {
+  "engine": "Traffic Engine",
+  "severity": "Medium",
+  "alertType": "Anomalous Network Flow",
+  "details": {
+    "reconstruction_error": 0.1795004121477477,
+    "anomaly_threshold": 0.00076731,
+    "flow_details": {
+      "ACKFlagCount": 1.0,
+      "ActiveMax": 0.0,
+      "ActiveMean": 0.0,
+      "ActiveStd": 0.0,
+      "AvgBwdSegmentSize": 5800.5,
+      "AvgFwdSegmentSize": 6.5,
+      "AvgPacketSize": 1937.8333740234375,
+      "BwdAvgBulkRate": 0.0,
+      "BwdAvgBytesBulk": 0.0,
+      "BwdAvgPacketsBulk": 0.0,
+      "BwdHeaderLength": 40.0,
+      "BwdIATMax": 3090.0,
+      "BwdIATMean": 3090.0,
+      "BwdIATMin": 3090.0,
+      "BwdIATStd": 0.0,
+      "BwdIATTotal": 3090.0,
+      "BwdPSHFlags": 0.0,
+      "BwdPacketLengthMax": 11595.0,
+      "BwdPacketLengthMean": 5800.5,
+      "BwdPacketLengthMin": 6.0,
+      "BwdPacketLengthStd": 8194.66015625,
+      "BwdPacketsLengthTotal": 11601.0,
+      "BwdPacketss": 73.61331176757812,
+      "BwdURGFlags": 0.0,
+      "CWEFlagCount": 0.0,
+      "DownUpRatio": 0.0,
+      "ECEFlagCount": 0.0,
+      "FINFlagCount": 0.0,
+      "FlowBytess": 427950.9735,
+      "FlowDuration": 27169.0,
+      "FlowIATMax": 24009.0,
+      "FlowIATMean": 5433.7998046875,
+      "FlowIATMin": 0.0,
+      "FlowIATStd": 10468.4501953125,
+      "FlowPacketss": 220.8399279,
+      "FwdActDataPackets": 2.0,
+      "FwdAvgBulkRate": 0.0,
+      "FwdAvgBytesBulk": 0.0,
+      "FwdAvgPacketsBulk": 0.0,
+      "FwdHeaderLength": 104.0,
+      "FwdIATMax": 24009.0,
+      "FwdIATMean": 8004.0,
+      "FwdIATMin": 0.0,
+      "FwdIATStd": 13860.736328125,
+      "FwdIATTotal": 24012.0,
+      "FwdPSHFlags": 0.0,
+      "FwdPacketLengthMax": 20.0,
+      "FwdPacketLengthMean": 6.5,
+      "FwdPacketLengthMin": 0.0,
+      "FwdPacketLengthStd": 9.433980941772461,
+      "FwdPacketsLengthTotal": 26.0,
+      "FwdPacketss": 147.22662353515625,
+      "FwdSegSizeMin": 20.0,
+      "FwdURGFlags": 0.0,
+      "IdleMax": 0.0,
+      "IdleMean": 0.0,
+      "IdleMin": 0.0,
+      "IdleStd": 0.0,
+      "InitBwdWinBytes": 229.0,
+      "InitFwdWinBytes": 29200.0,
+      "PSHFlagCount": 1.0,
+      "PacketLengthMax": 11595.0,
+      "PacketLengthMean": 1661.0,
+      "PacketLengthMin": 0.0,
+      "PacketLengthStd": 4380.48779296875,
+      "PacketLengthVariance": 19200000.0,
+      "Protocol": 6.0,
+      "RSTFlagCount": 0.0,
+      "SYNFlagCount": 0.0,
+      "SubflowBwdBytes": 11601.0,
+      "SubflowBwdPackets": 2.0,
+      "SubflowFwdBytes": 26.0,
+      "SubflowFwdPackets": 4.0,
+      "TotalBackwardPackets": 2.0,
+      "TotalFwdPackets": 4.0,
+      "URGFlagCount": 0.0
+    }
+  }
+}
+2026-01-13 20:31:57,542 - __main__ - INFO - Attempting to send alert (attempt 1/4)
+2026-01-13 20:31:57,798 - __main__ - INFO - [OK] Alert sent successfully
+2026-01-13 21:37:20,339 - __main__ - INFO - [OK] IDS Model loaded successfully.
+2026-01-13 21:37:20,739 - absl - WARNING - Compiled the loaded model, but the compiled metrics have yet to be built. `model.compile_metrics` will be empty until you train or evaluate the model.
+2026-01-13 21:37:20,760 - __main__ - INFO - [OK] Traffic Engine loaded successfully.
+2026-01-13 21:37:20,760 - __main__ - INFO - --- Analyzing Network Flow with Traffic Engine ---
+2026-01-13 21:37:21,201 - __main__ - WARNING - [ALERT] ANOMALY DETECTED!
+2026-01-13 21:37:21,201 - __main__ - INFO - Alert generated: {
+  "engine": "Traffic Engine",
+  "severity": "Medium",
+  "alertType": "Anomalous Network Flow",
+  "details": {
+    "reconstruction_error": 0.1795004121477477,
+    "anomaly_threshold": 0.00076731,
+    "flow_details": {
+      "ACKFlagCount": 1.0,
+      "ActiveMax": 0.0,
+      "ActiveMean": 0.0,
+      "ActiveStd": 0.0,
+      "AvgBwdSegmentSize": 5800.5,
+      "AvgFwdSegmentSize": 6.5,
+      "AvgPacketSize": 1937.8333740234375,
+      "BwdAvgBulkRate": 0.0,
+      "BwdAvgBytesBulk": 0.0,
+      "BwdAvgPacketsBulk": 0.0,
+      "BwdHeaderLength": 40.0,
+      "BwdIATMax": 3090.0,
+      "BwdIATMean": 3090.0,
+      "BwdIATMin": 3090.0,
+      "BwdIATStd": 0.0,
+      "BwdIATTotal": 3090.0,
+      "BwdPSHFlags": 0.0,
+      "BwdPacketLengthMax": 11595.0,
+      "BwdPacketLengthMean": 5800.5,
+      "BwdPacketLengthMin": 6.0,
+      "BwdPacketLengthStd": 8194.66015625,
+      "BwdPacketsLengthTotal": 11601.0,
+      "BwdPacketss": 73.61331176757812,
+      "BwdURGFlags": 0.0,
+      "CWEFlagCount": 0.0,
+      "DownUpRatio": 0.0,
+      "ECEFlagCount": 0.0,
+      "FINFlagCount": 0.0,
+      "FlowBytess": 427950.9735,
+      "FlowDuration": 27169.0,
+      "FlowIATMax": 24009.0,
+      "FlowIATMean": 5433.7998046875,
+      "FlowIATMin": 0.0,
+      "FlowIATStd": 10468.4501953125,
+      "FlowPacketss": 220.8399279,
+      "FwdActDataPackets": 2.0,
+      "FwdAvgBulkRate": 0.0,
+      "FwdAvgBytesBulk": 0.0,
+      "FwdAvgPacketsBulk": 0.0,
+      "FwdHeaderLength": 104.0,
+      "FwdIATMax": 24009.0,
+      "FwdIATMean": 8004.0,
+      "FwdIATMin": 0.0,
+      "FwdIATStd": 13860.736328125,
+      "FwdIATTotal": 24012.0,
+      "FwdPSHFlags": 0.0,
+      "FwdPacketLengthMax": 20.0,
+      "FwdPacketLengthMean": 6.5,
+      "FwdPacketLengthMin": 0.0,
+      "FwdPacketLengthStd": 9.433980941772461,
+      "FwdPacketsLengthTotal": 26.0,
+      "FwdPacketss": 147.22662353515625,
+      "FwdSegSizeMin": 20.0,
+      "FwdURGFlags": 0.0,
+      "IdleMax": 0.0,
+      "IdleMean": 0.0,
+      "IdleMin": 0.0,
+      "IdleStd": 0.0,
+      "InitBwdWinBytes": 229.0,
+      "InitFwdWinBytes": 29200.0,
+      "PSHFlagCount": 1.0,
+      "PacketLengthMax": 11595.0,
+      "PacketLengthMean": 1661.0,
+      "PacketLengthMin": 0.0,
+      "PacketLengthStd": 4380.48779296875,
+      "PacketLengthVariance": 19200000.0,
+      "Protocol": 6.0,
+      "RSTFlagCount": 0.0,
+      "SYNFlagCount": 0.0,
+      "SubflowBwdBytes": 11601.0,
+      "SubflowBwdPackets": 2.0,
+      "SubflowFwdBytes": 26.0,
+      "SubflowFwdPackets": 4.0,
+      "TotalBackwardPackets": 2.0,
+      "TotalFwdPackets": 4.0,
+      "URGFlagCount": 0.0
+    }
+  }
+}
+2026-01-13 21:37:21,201 - __main__ - INFO - Attempting to send alert (attempt 1/4)
+2026-01-13 21:37:21,564 - __main__ - INFO - [OK] Alert sent successfully
+2026-01-14 13:56:07,977 - __main__ - INFO - [OK] IDS Model loaded successfully.
+2026-01-14 13:56:08,326 - absl - WARNING - Compiled the loaded model, but the compiled metrics have yet to be built. `model.compile_metrics` will be empty until you train or evaluate the model.
+2026-01-14 13:56:08,341 - __main__ - INFO - [OK] Traffic Engine loaded successfully.
+2026-01-14 13:56:08,442 - absl - WARNING - Compiled the loaded model, but the compiled metrics have yet to be built. `model.compile_metrics` will be empty until you train or evaluate the model.
+2026-01-14 13:56:08,465 - __main__ - INFO - [OK] UEBA Engine loaded successfully.
+2026-01-14 13:56:08,465 - __main__ - INFO - --- Analyzing User Behavior with UEBA Engine ---
+2026-01-14 13:56:08,900 - __main__ - INFO - No alert generated - all checks passed
+2026-01-14 13:56:49,974 - __main__ - INFO - [OK] IDS Model loaded successfully.
+2026-01-14 13:56:50,204 - absl - WARNING - Compiled the loaded model, but the compiled metrics have yet to be built. `model.compile_metrics` will be empty until you train or evaluate the model.
+2026-01-14 13:56:50,219 - __main__ - INFO - [OK] Traffic Engine loaded successfully.
+2026-01-14 13:56:50,337 - absl - WARNING - Compiled the loaded model, but the compiled metrics have yet to be built. `model.compile_metrics` will be empty until you train or evaluate the model.
+2026-01-14 13:56:50,352 - __main__ - INFO - [OK] UEBA Engine loaded successfully.
+2026-01-14 13:56:50,352 - __main__ - INFO - --- Analyzing User Behavior with UEBA Engine ---
+2026-01-14 13:56:50,642 - __main__ - INFO - No alert generated - all checks passed
+2026-01-14 13:57:24,841 - __main__ - INFO - [OK] IDS Model loaded successfully.
+2026-01-14 13:57:25,059 - absl - WARNING - Compiled the loaded model, but the compiled metrics have yet to be built. `model.compile_metrics` will be empty until you train or evaluate the model.
+2026-01-14 13:57:25,074 - __main__ - INFO - [OK] Traffic Engine loaded successfully.
+2026-01-14 13:57:25,182 - absl - WARNING - Compiled the loaded model, but the compiled metrics have yet to be built. `model.compile_metrics` will be empty until you train or evaluate the model.
+2026-01-14 13:57:25,182 - __main__ - INFO - [OK] UEBA Engine loaded successfully.
+2026-01-14 13:57:25,182 - __main__ - INFO - --- Analyzing User Behavior with UEBA Engine ---
+2026-01-14 13:57:25,469 - __main__ - WARNING - [ALERT] ANOMALOUS BEHAVIOR DETECTED!
+2026-01-14 13:57:25,482 - __main__ - INFO - Alert generated: {
+  "engine": "UEBA",
+  "severity": "High",
+  "alertType": "Insider Threat Detected",
+  "details": {
+    "user_profile": {
+      "user_id": "USR666",
+      "avg_session_hours": 2.1,
+      "after_hours_login_count": 150,
+      "total_usb_connections": 85,
+      "total_email_volume": 10000000.0,
+      "total_http_volume": 500000000.0,
+      "total_files_accessed": 13000
+    },
+    "reconstruction_error": 3.2795515559822923,
+    "anomaly_threshold": 0.1,
+    "feature_contributions": {
+      "avg_session_hours": {
+        "original": 0.175,
+        "reconstructed": 0.5350970029830933,
+        "deviation": 0.3600970029830933
+      },
+      "after_hours_login_count": {
+        "original": 0.3,
+        "reconstructed": 0.37961897253990173,
+        "deviation": 0.07961897253990174
+      },
+      "total_usb_connections": {
+        "original": 0.85,
+        "reconstructed": 0.001230034977197647,
+        "deviation": 0.8487699650228023
+      },
+      "total_email_volume": {
+        "original": 0.002,
+        "reconstructed": 0.7197574377059937,
+        "deviation": 0.7177574377059937
+      },
+      "total_http_volume": {
+        "original": 5.0,
+        "reconstructed": 0.8087435960769653,
+        "deviation": 4.191256403923035
+      },
+      "total_files_accessed": {
+        "original": 0.8666666666666667,
+        "reconstructed": 0.006966796237975359,
+        "deviation": 0.8596998704286913
+      }
+    },
+    "top_anomalous_features": [
+      "total_http_volume",
+      "total_files_accessed",
+      "total_usb_connections"
+    ]
+  }
+}
+2026-01-14 13:57:25,483 - __main__ - INFO - Attempting to send alert (attempt 1/4)
+2026-01-14 13:57:25,698 - __main__ - INFO - [OK] Alert sent successfully
+2026-01-15 22:11:42,967 - __main__ - INFO - [OK] IDS Engine (RandomForest) loaded successfully.
+2026-01-15 22:11:43,134 - absl - WARNING - Compiled the loaded model, but the compiled metrics have yet to be built. `model.compile_metrics` will be empty until you train or evaluate the model.
+2026-01-15 22:11:43,143 - __main__ - INFO - [OK] Traffic Engine (Autoencoder) loaded successfully.
+2026-01-15 22:11:43,170 - absl - WARNING - Compiled the loaded model, but the compiled metrics have yet to be built. `model.compile_metrics` will be empty until you train or evaluate the model.
+2026-01-15 22:11:43,177 - __main__ - INFO - [OK] UEBA Engine (Autoencoder) loaded successfully.
+2026-01-15 22:11:43,264 - __main__ - INFO - [OK] Artifact Engine (XGBoost) loaded successfully.
+2026-01-15 22:12:06,094 - __main__ - INFO - [OK] IDS Engine (RandomForest) loaded successfully.
+2026-01-15 22:12:06,246 - absl - WARNING - Compiled the loaded model, but the compiled metrics have yet to be built. `model.compile_metrics` will be empty until you train or evaluate the model.
+2026-01-15 22:12:06,255 - __main__ - INFO - [OK] Traffic Engine (Autoencoder) loaded successfully.
+2026-01-15 22:12:06,292 - absl - WARNING - Compiled the loaded model, but the compiled metrics have yet to be built. `model.compile_metrics` will be empty until you train or evaluate the model.
+2026-01-15 22:12:06,297 - __main__ - INFO - [OK] UEBA Engine (Autoencoder) loaded successfully.
+2026-01-15 22:12:06,334 - __main__ - INFO - [OK] Artifact Engine (XGBoost) loaded successfully.
+2026-01-15 22:12:12,561 - __main__ - INFO - [OK] IDS Engine (RandomForest) loaded successfully.
+2026-01-15 22:12:12,700 - absl - WARNING - Compiled the loaded model, but the compiled metrics have yet to be built. `model.compile_metrics` will be empty until you train or evaluate the model.
+2026-01-15 22:12:12,715 - __main__ - INFO - [OK] Traffic Engine (Autoencoder) loaded successfully.
+2026-01-15 22:12:12,757 - absl - WARNING - Compiled the loaded model, but the compiled metrics have yet to be built. `model.compile_metrics` will be empty until you train or evaluate the model.
+2026-01-15 22:12:12,762 - __main__ - INFO - [OK] UEBA Engine (Autoencoder) loaded successfully.
+2026-01-15 22:12:12,802 - __main__ - INFO - [OK] Artifact Engine (XGBoost) loaded successfully.
+2026-01-15 22:12:35,855 - __main__ - INFO - [OK] IDS Engine (RandomForest) loaded successfully.
+2026-01-15 22:12:36,021 - absl - WARNING - Compiled the loaded model, but the compiled metrics have yet to be built. `model.compile_metrics` will be empty until you train or evaluate the model.
+2026-01-15 22:12:36,030 - __main__ - INFO - [OK] Traffic Engine (Autoencoder) loaded successfully.
+2026-01-15 22:12:36,070 - absl - WARNING - Compiled the loaded model, but the compiled metrics have yet to be built. `model.compile_metrics` will be empty until you train or evaluate the model.
+2026-01-15 22:12:36,074 - __main__ - INFO - [OK] UEBA Engine (Autoencoder) loaded successfully.
+2026-01-15 22:12:36,121 - __main__ - INFO - [OK] Artifact Engine (XGBoost) loaded successfully.
+2026-01-15 22:12:42,154 - __main__ - INFO - [OK] IDS Engine (RandomForest) loaded successfully.
+2026-01-15 22:12:42,304 - absl - WARNING - Compiled the loaded model, but the compiled metrics have yet to be built. `model.compile_metrics` will be empty until you train or evaluate the model.
+2026-01-15 22:12:42,322 - __main__ - INFO - [OK] Traffic Engine (Autoencoder) loaded successfully.
+2026-01-15 22:12:42,361 - absl - WARNING - Compiled the loaded model, but the compiled metrics have yet to be built. `model.compile_metrics` will be empty until you train or evaluate the model.
+2026-01-15 22:12:42,366 - __main__ - INFO - [OK] UEBA Engine (Autoencoder) loaded successfully.
+2026-01-15 22:12:42,416 - __main__ - INFO - [OK] Artifact Engine (XGBoost) loaded successfully.
+2026-01-15 22:12:42,416 - __main__ - INFO - --- Analyzing IP with Threat Intelligence: 8.8.8.8 ---
