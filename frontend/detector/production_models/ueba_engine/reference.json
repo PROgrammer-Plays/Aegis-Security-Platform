@@ -1,0 +1,37 @@
+{
+  "test_cases": {
+    "benign": {
+      "input": {
+        "avg_session_hours": 10.072582159624412,
+        "after_hours_login_count": 0.0,
+        "total_usb_connections": 0.0,
+        "total_email_volume": 342361172.0,
+        "total_http_volume": 6656921.0,
+        "total_files_accessed": 0.0
+      },
+      "expected_label": "Normal Behavior",
+      "expected_is_anomaly": false,
+      "description": "Known good sample that should NOT trigger detection"
+    },
+    "attack": {
+      "input": {
+        "avg_session_hours": 11.078210382513662,
+        "after_hours_login_count": 504.0,
+        "total_usb_connections": 4206.0,
+        "total_email_volume": 4689908861.0,
+        "total_http_volume": 60099300.0,
+        "total_files_accessed": 13882.0
+      },
+      "expected_label": "Insider Threat",
+      "expected_is_anomaly": true,
+      "description": "Known bad sample that SHOULD trigger detection"
+    }
+  },
+  "metadata": {
+    "vector_shape": 6,
+    "created_from": {
+      "benign": "tests/data/ueba_normal_vector.txt",
+      "attack": "tests/data/ueba_anomaly_vector.txt"
+    }
+  }
+}

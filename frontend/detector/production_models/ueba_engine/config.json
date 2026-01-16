@@ -1,0 +1,32 @@
+{
+  "metadata": {
+    "engine_name": "ueba_engine",
+    "algorithm": "Autoencoder",
+    "description": "User behavior anomaly detection for insider threats",
+    "version": "1.0.0"
+  },
+  "model": {
+    "engine_type": "tensorflow",
+    "input_features": [
+      "avg_session_hours",
+      "after_hours_login_count",
+      "total_usb_connections",
+      "total_email_volume",
+      "total_http_volume",
+      "total_files_accessed"
+    ],
+    "feature_count": 6,
+    "labels": {
+      "0": "Normal Behavior",
+      "1": "Insider Threat"
+    },
+    "threshold": 0.1,
+    "requires_scaling": true
+  },
+  "files": {
+    "model": "model.h5",
+    "scaler": "scaler.joblib",
+    "config": "config.json",
+    "reference": "reference.json"
+  }
+}

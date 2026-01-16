@@ -1,192 +1,182 @@
-# detector/detector.py (ULTIMATE 5-ENGINE VERSION - Phase 1 Complete)
+# detector.py - 5-Engine Security Detector with ModelManager
+# Place in: detector/detector.py
+
 import requests
 import json
 import sys
 import os
-import joblib
-import pandas as pd
-import numpy as np
-import tensorflow as tf
 import logging
-from typing import Optional, Dict, Any
+from pathlib import Path
+from typing import Optional, Dict
 
-# Import configuration and test data
-from config import Config
-from test_data import (NORMAL_FLOW, ANOMALY_FLOW, ATTACK_FLOW, BENIGN_FLOW,
-                       NORMAL_USER, SUBTLE_INSIDER, OBVIOUS_ATTACKER)
+# Import our professional ModelManager
+from model_manager import ModelManager, load_all_engines, run_system_health_check
 
-# --- Setup Logging ---
+# Setup logging
 logging.basicConfig(
-    level=getattr(logging, Config.LOG_LEVEL),
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler(Config.LOG_FILE),
+        logging.FileHandler("detector.log"),
         logging.StreamHandler()
     ]
 )
 logger = logging.getLogger(__name__)
 
-# --- Global Variables for Models ---
-IDS_MODEL = None
-IDS_MODEL_FEATURES = None
-TRAFFIC_MODEL = None
-TRAFFIC_SCALER = None
-TRAFFIC_FEATURES = None
-UEBA_MODEL = None
-UEBA_SCALER = None
-UEBA_FEATURES = ['avg_session_hours', 'after_hours_login_count', 'total_usb_connections', 
-                 'total_email_volume', 'total_http_volume', 'total_files_accessed']
-ARTIFACT_PIPELINE = None
-ARTIFACT_FEATURES = None
+# === CONFIGURATION ===
+class Config:
+    BACKEND_API_URL = os.getenv("BACKEND_API_URL", "http://localhost:5000/api/alerts")
+    IPQS_API_KEY = os.getenv("IPQS_API_KEY")
+    VIRUSTOTAL_API_KEY = os.getenv("VIRUSTOTAL_API_KEY")
+    
+    # API Settings
+    IPQS_FRAUD_THRESHOLD = 75
+    VT_MALICIOUS_THRESHOLD = 1
+    API_TIMEOUT = 5
+    MAX_RETRIES = 3
 
-# --- 1. Load All 5 Models ---
-def load_models():
-    """Load all 5 ML models at startup"""
-    global IDS_MODEL, IDS_MODEL_FEATURES, TRAFFIC_MODEL, TRAFFIC_SCALER, TRAFFIC_FEATURES
-    global UEBA_MODEL, UEBA_SCALER, ARTIFACT_PIPELINE, ARTIFACT_FEATURES
-    
-    print("\n" + "="*60)
-    print("  INITIALIZING 5-ENGINE DETECTION SYSTEM")
-    print("="*60 + "\n")
-    
-    # 1. Load IDS Model (RandomForest)
-    try:
-        IDS_MODEL = joblib.load(Config.IDS_MODEL_PATH)
-        with open(Config.IDS_FEATURES_PATH, 'r') as f:
-            IDS_MODEL_FEATURES = json.load(f)
-        logger.info("[OK] IDS Engine (RandomForest) loaded successfully.")
-        print(f"✅ [1/5] IDS Engine loaded ({len(IDS_MODEL_FEATURES)} features)")
-    except Exception as e:
-        logger.warning(f"⚠️ IDS Engine not found: {e}")
-        print(f"⚠️ [1/5] IDS Engine not found")
-    
-    # 2. Load Traffic Engine (Autoencoder)
-    try:
-        TRAFFIC_MODEL = tf.keras.models.load_model(Config.TRAFFIC_MODEL_PATH)
-        TRAFFIC_SCALER = joblib.load(Config.TRAFFIC_SCALER_PATH)
-        with open(Config.TRAFFIC_FEATURES_PATH, 'r') as f:
-            TRAFFIC_FEATURES = json.load(f)
-        logger.info("[OK] Traffic Engine (Autoencoder) loaded successfully.")
-        print(f"✅ [2/5] Traffic Engine loaded ({len(TRAFFIC_FEATURES)} features)")
-    except Exception as e:
-        logger.warning(f"⚠️ Traffic Engine not found: {e}")
-        print(f"⚠️ [2/5] Traffic Engine not found")
-    
-    # 3. Load UEBA Engine (Autoencoder)
-    try:
-        UEBA_MODEL = tf.keras.models.load_model(Config.UEBA_MODEL_PATH)
-        UEBA_SCALER = joblib.load(Config.UEBA_SCALER_PATH)
-        logger.info("[OK] UEBA Engine (Autoencoder) loaded successfully.")
-        print(f"✅ [3/5] UEBA Engine loaded ({len(UEBA_FEATURES)} features)")
-    except Exception as e:
-        logger.warning(f"⚠️ UEBA Engine not found: {e}")
-        print(f"⚠️ [3/5] UEBA Engine not found")
-    
-    # 4. Load Artifact Engine (XGBoost Pipeline)
-    try:
-        ARTIFACT_PIPELINE = joblib.load(Config.ARTIFACT_PIPELINE_PATH)
-        with open(Config.ARTIFACT_FEATURES_PATH, 'r') as f:
-            ARTIFACT_FEATURES = json.load(f)
-        logger.info("[OK] Artifact Engine (XGBoost) loaded successfully.")
-        print(f"✅ [4/5] Artifact Engine loaded ({len(ARTIFACT_FEATURES)} features)")
-    except Exception as e:
-        logger.warning(f"⚠️ Artifact Engine not found: {e}")
-        print(f"⚠️ [4/5] Artifact Engine not found")
-    
-    print(f"✅ [5/5] Threat Intelligence ready (API-based)")
-    print("\n" + "="*60)
-    print("  SYSTEM READY - All Engines Online")
-    print("="*60 + "\n")
+# === GLOBAL ENGINE INSTANCES ===
+print("\n" + "="*70)
+print("  🚀 INITIALIZING 5-ENGINE DETECTION SYSTEM")
+print("="*70)
 
-# --- 2. Threat Intelligence (API-based) ---
-def query_ipqs(ip: str, api_key: Optional[str]) -> Optional[Dict[str, Any]]:
-    """Query IPQualityScore API for IP reputation"""
+# Load all engines using ModelManager
+ENGINES = load_all_engines()
+
+# Run health checks on startup
+if ENGINES:
+    print("\n" + "="*70)
+    print("  🏥 RUNNING STARTUP HEALTH CHECKS")
+    print("="*70)
+    
+    system_healthy = run_system_health_check(ENGINES)
+    
+    if system_healthy:
+        print("\n" + "="*70)
+        print("  ✅ SYSTEM READY FOR DETECTION")
+        print("="*70 + "\n")
+    else:
+        print("\n" + "="*70)
+        print("  ⚠️  SYSTEM STARTED WITH WARNINGS")
+        print("="*70 + "\n")
+else:
+    print("\n❌ NO ENGINES LOADED - Check production_models/ directory\n")
+    sys.exit(1)
+
+# === TEST DATA ===
+# Traffic Engine Test Data
+NORMAL_FLOW = {
+    'Protocol': 6.0,
+    'FlowDuration': 11.0,
+    'TotalFwdPackets': 1.0,
+    'TotalBackwardPackets': 1.0
+}
+
+ANOMALY_FLOW = {
+    'Protocol': 6.0,
+    'FlowDuration': 27169.0,
+    'TotalFwdPackets': 4.0,
+    'TotalBackwardPackets': 2.0,
+    'FlowBytess': 427950.97,
+    'AvgPacketSize': 1937.83
+}
+
+# UEBA Test Data
+NORMAL_USER = {
+    'user_id': 'USR001',
+    'avg_session_hours': 8.5,
+    'after_hours_login_count': 5,
+    'total_usb_connections': 2,
+    'total_email_volume': 1.5e8,
+    'total_http_volume': 5e6,
+    'total_files_accessed': 200
+}
+
+OBVIOUS_ATTACKER = {
+    'user_id': 'USR666',
+    'avg_session_hours': 2.1,
+    'after_hours_login_count': 150,
+    'total_usb_connections': 85,
+    'total_email_volume': 1e7,
+    'total_http_volume': 5e8,
+    'total_files_accessed': 13000
+}
+
+# === THREAT INTELLIGENCE ===
+def query_ipqs(ip: str, api_key: Optional[str]) -> Optional[Dict]:
+    """Query IPQualityScore API"""
     if not api_key:
         return None
+    
     url = f"https://www.ipqualityscore.com/api/json/ip/{api_key}/{ip}"
     try:
         response = requests.get(url, timeout=Config.API_TIMEOUT)
         response.raise_for_status()
         data = response.json()
         return data if data.get('success') else None
-    except Exception:
+    except Exception as e:
+        logger.error(f"IPQS query failed: {e}")
         return None
 
-def query_virustotal(ip: str, api_key: Optional[str]) -> Optional[Dict[str, Any]]:
-    """Query VirusTotal API for IP reputation"""
+def query_virustotal(ip: str, api_key: Optional[str]) -> Optional[Dict]:
+    """Query VirusTotal API"""
     if not api_key:
         return None
+    
     url = f"https://www.virustotal.com/api/v3/ip_addresses/{ip}"
     headers = {'x-apikey': api_key}
     try:
         response = requests.get(url, headers=headers, timeout=Config.API_TIMEOUT)
         response.raise_for_status()
         return response.json()
-    except Exception:
+    except Exception as e:
+        logger.error(f"VirusTotal query failed: {e}")
         return None
 
-def get_fused_threat_intelligence(ip: str, api_keys: Dict[str, str]) -> Optional[Dict[str, Any]]:
-    """Query multiple threat intelligence sources and fuse results"""
-    logger.info(f"--- Analyzing IP with Threat Intelligence: {ip} ---")
-    print(f"\n{'='*60}")
-    print(f"  THREAT INTELLIGENCE ANALYSIS: {ip}")
-    print(f"{'='*60}")
+def analyze_threat_intelligence(ip: str) -> Optional[Dict]:
+    """Analyze IP using threat intelligence sources"""
+    print(f"\n{'='*70}")
+    print(f"  🔍 THREAT INTELLIGENCE: {ip}")
+    print(f"{'='*70}\n")
     
-    ipqs_data = query_ipqs(ip, api_keys.get('ipqs'))
-    vt_data = query_virustotal(ip, api_keys.get('vt'))
+    ipqs_data = query_ipqs(ip, Config.IPQS_API_KEY)
+    vt_data = query_virustotal(ip, Config.VIRUSTOTAL_API_KEY)
     
     threat_score = 0
     details = {"ip_address": ip, "sources": [], "raw_data": {}}
     threat_indicators = []
     
+    # Analyze IPQS data
     if ipqs_data:
         fraud_score = ipqs_data.get('fraud_score', 0)
-        is_proxy = ipqs_data.get('proxy', False)
-        is_vpn = ipqs_data.get('vpn', False)
-        is_tor = ipqs_data.get('tor', False)
-        
-        details["raw_data"]["ipqs"] = {
-            "fraud_score": fraud_score,
-            "proxy": is_proxy,
-            "vpn": is_vpn,
-            "tor": is_tor
-        }
-        
         if fraud_score >= Config.IPQS_FRAUD_THRESHOLD:
             threat_score += fraud_score
             threat_indicators.append(f"IPQS Fraud Score: {fraud_score}/100")
             details["sources"].append("IPQualityScore")
-        
-        if is_proxy or is_vpn or is_tor:
-            threat_indicators.append(f"Anonymization: Proxy={is_proxy}, VPN={is_vpn}, Tor={is_tor}")
+        details["raw_data"]["ipqs"] = {"fraud_score": fraud_score}
     
+    # Analyze VirusTotal data
     if vt_data:
         try:
             stats = vt_data.get('data', {}).get('attributes', {}).get('last_analysis_stats', {})
             malicious = stats.get('malicious', 0)
-            suspicious = stats.get('suspicious', 0)
-            
-            details["raw_data"]["virustotal"] = {
-                "malicious": malicious,
-                "suspicious": suspicious
-            }
-            
             if malicious >= Config.VT_MALICIOUS_THRESHOLD:
                 threat_score += malicious * 20
-                threat_indicators.append(f"VirusTotal: {malicious} engines flagged malicious")
+                threat_indicators.append(f"VirusTotal: {malicious} engines flagged")
                 details["sources"].append("VirusTotal")
         except Exception as e:
-            logger.error(f"Error parsing VirusTotal data: {e}")
+            logger.warning(f"Could not parse VirusTotal data: {e}")
     
-    details["threat_indicators"] = threat_indicators
     details["threat_score"] = threat_score
+    details["threat_indicators"] = threat_indicators
     
+    # Determine if threat
     if threat_score >= Config.IPQS_FRAUD_THRESHOLD:
         severity = "Critical" if threat_score > 150 else "High" if threat_score > 100 else "Medium"
-        print(f"  🚨 MALICIOUS IP DETECTED!")
-        print(f"  Threat Score: {threat_score}")
-        print(f"  Severity: {severity}")
-        print(f"  Indicators: {', '.join(threat_indicators)}")
+        print(f"🚨 MALICIOUS IP DETECTED!")
+        print(f"Threat Score: {threat_score}")
+        print(f"Severity: {severity}")
+        print(f"Indicators: {', '.join(threat_indicators)}\n")
         
         return {
             "engine": "Threat Intelligence",
@@ -195,188 +185,172 @@ def get_fused_threat_intelligence(ip: str, api_keys: Dict[str, str]) -> Optional
             "details": details
         }
     else:
-        print(f"  ✅ IP appears benign (Score: {threat_score})")
+        print(f"✅ IP appears benign (Score: {threat_score})\n")
         return None
 
-# --- 3. IDS Engine (RandomForest) ---
-def analyze_network_flow_ids(flow_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    """Analyze network flow using IDS RandomForest model"""
-    if not IDS_MODEL or not IDS_MODEL_FEATURES:
-        print("  ⚠️ IDS Engine not loaded.")
+# === IDS ENGINE ===
+def analyze_ids(flow_data: Dict) -> Optional[Dict]:
+    """Analyze network flow using IDS engine"""
+    if 'ids_engine' not in ENGINES:
+        print("⚠️  IDS Engine not available")
         return None
     
-    print(f"\n{'='*60}")
-    print(f"  IDS ENGINE ANALYSIS (RandomForest)")
-    print(f"{'='*60}")
+    print(f"\n{'='*70}")
+    print(f"  🛡️  IDS ENGINE (RandomForest)")
+    print(f"{'='*70}\n")
     
     try:
-        flow_df = pd.DataFrame([flow_data]).reindex(columns=IDS_MODEL_FEATURES, fill_value=0)
-        prediction = IDS_MODEL.predict(flow_df)
-        probabilities = IDS_MODEL.predict_proba(flow_df)[0]
+        manager = ENGINES['ids_engine']
+        result = manager.predict(flow_data)
         
-        print(f"  Prediction: {'ATTACK' if prediction[0] == 1 else 'BENIGN'}")
-        print(f"  Confidence: Normal={probabilities[0]:.2%}, Attack={probabilities[1]:.2%}")
+        print(f"Verdict: {result['verdict']}")
+        print(f"Confidence: {result.get('confidence', 0):.2%}")
+        print(f"Is Anomaly: {result['is_anomaly']}\n")
         
-        if prediction[0] == 1:
-            print(f"  🚨 NETWORK INTRUSION DETECTED!")
+        if result['is_anomaly']:
+            print(f"🚨 NETWORK INTRUSION DETECTED!\n")
             return {
                 "engine": "IDS",
                 "severity": "High",
                 "alertType": "Network Intrusion Detected",
                 "details": {
-                    **flow_data,
-                    "confidence": float(probabilities[1]),
-                    "attack_probability": float(probabilities[1])
+                    "flow_data": flow_data,
+                    "verdict": result['verdict'],
+                    "confidence": result.get('confidence', 0),
+                    "score": result.get('score', 0)
                 }
             }
         else:
-            print(f"  ✅ Flow is benign")
+            print(f"✅ Flow is benign\n")
             return None
+            
     except Exception as e:
-        logger.error(f"Error in IDS analysis: {e}")
+        logger.error(f"IDS Engine error: {e}")
         return None
 
-# --- 4. Traffic Engine (Autoencoder) ---
-def analyze_network_flow_traffic(flow_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    """Analyze network flow using Traffic Autoencoder model"""
-    if not TRAFFIC_MODEL or not TRAFFIC_SCALER:
-        print("  ⚠️ Traffic Engine not loaded.")
+# === TRAFFIC ENGINE ===
+def analyze_traffic(flow_data: Dict) -> Optional[Dict]:
+    """Analyze network flow using Traffic engine (Autoencoder)"""
+    if 'traffic_engine' not in ENGINES:
+        print("⚠️  Traffic Engine not available")
         return None
     
-    print(f"\n{'='*60}")
-    print(f"  TRAFFIC ENGINE ANALYSIS (Autoencoder)")
-    print(f"{'='*60}")
+    print(f"\n{'='*70}")
+    print(f"  📊 TRAFFIC ENGINE (Autoencoder)")
+    print(f"{'='*70}\n")
     
     try:
-        flow_df = pd.DataFrame([flow_data]).reindex(columns=TRAFFIC_FEATURES, fill_value=0)
-        scaled_flow = TRAFFIC_SCALER.transform(flow_df)
-        reconstruction = TRAFFIC_MODEL.predict(scaled_flow, verbose=0)
-        error = np.mean(np.power(scaled_flow - reconstruction, 2))
+        manager = ENGINES['traffic_engine']
+        result = manager.predict(flow_data)
         
-        print(f"  Reconstruction Error: {error:.8f}")
-        print(f"  Anomaly Threshold: {Config.ANOMALY_THRESHOLD:.8f}")
-        print(f"  Separation: {error / Config.ANOMALY_THRESHOLD:.2f}x threshold")
+        print(f"Reconstruction Error: {result['score']:.8f}")
+        print(f"Threshold: {result['threshold']:.8f}")
+        print(f"Confidence: {result.get('confidence', 0):.2f}x\n")
         
-        if error > Config.ANOMALY_THRESHOLD:
-            print(f"  🚨 TRAFFIC ANOMALY DETECTED!")
+        if result['is_anomaly']:
+            print(f"🚨 TRAFFIC ANOMALY DETECTED!\n")
+            severity = "High" if result['score'] > result['threshold'] * 10 else "Medium"
+            
             return {
                 "engine": "Traffic Engine",
-                "severity": "High" if error > Config.ANOMALY_THRESHOLD * 10 else "Medium",
+                "severity": severity,
                 "alertType": "Anomalous Network Flow",
                 "details": {
-                    "reconstruction_error": float(error),
-                    "anomaly_threshold": Config.ANOMALY_THRESHOLD,
-                    "separation_ratio": float(error / Config.ANOMALY_THRESHOLD),
+                    "reconstruction_error": result['score'],
+                    "anomaly_threshold": result['threshold'],
+                    "separation_ratio": result.get('confidence', 0),
+                    "verdict": result['verdict'],
                     "flow_details": flow_data
                 }
             }
         else:
-            print(f"  ✅ Flow is normal")
+            print(f"✅ Flow is normal\n")
             return None
+            
     except Exception as e:
-        logger.error(f"Error in Traffic Engine: {e}")
+        logger.error(f"Traffic Engine error: {e}")
         return None
 
-# --- 5. UEBA Engine (Autoencoder) ---
-def analyze_user_behavior(user_profile_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    """Analyze user behavior using UEBA Autoencoder model"""
-    if not UEBA_MODEL or not UEBA_SCALER:
-        print("  ⚠️ UEBA Engine not loaded.")
+# === UEBA ENGINE ===
+def analyze_ueba(user_profile: Dict) -> Optional[Dict]:
+    """Analyze user behavior using UEBA engine"""
+    if 'ueba_engine' not in ENGINES:
+        print("⚠️  UEBA Engine not available")
         return None
     
-    print(f"\n{'='*60}")
-    print(f"  UEBA ENGINE ANALYSIS (Autoencoder)")
-    print(f"{'='*60}")
+    print(f"\n{'='*70}")
+    print(f"  👤 UEBA ENGINE (Autoencoder)")
+    print(f"{'='*70}\n")
     
     try:
-        user_df = pd.DataFrame([user_profile_data]).reindex(columns=UEBA_FEATURES, fill_value=0)
-        scaled_user = UEBA_SCALER.transform(user_df)
-        reconstruction = UEBA_MODEL.predict(scaled_user, verbose=0)
-        error = np.mean(np.power(scaled_user - reconstruction, 2))
+        manager = ENGINES['ueba_engine']
+        result = manager.predict(user_profile)
         
-        print(f"  User: {user_profile_data.get('user_id', 'Unknown')}")
-        print(f"  Reconstruction Error: {error:.8f}")
-        print(f"  Anomaly Threshold: {Config.UEBA_ANOMALY_THRESHOLD:.8f}")
+        print(f"User: {user_profile.get('user_id', 'Unknown')}")
+        print(f"Reconstruction Error: {result['score']:.8f}")
+        print(f"Threshold: {result['threshold']:.8f}")
+        print(f"Verdict: {result['verdict']}\n")
         
-        if error > Config.UEBA_ANOMALY_THRESHOLD:
-            severity = "Critical" if error > Config.UEBA_ANOMALY_THRESHOLD * 2 else "High"
-            print(f"  🚨 INSIDER THREAT DETECTED! (Severity: {severity})")
-            
-            # Feature contribution analysis
-            feature_contributions = {}
-            for i, feature in enumerate(UEBA_FEATURES):
-                original = scaled_user[0][i]
-                reconstructed = reconstruction[0][i]
-                deviation = abs(original - reconstructed)
-                feature_contributions[feature] = {
-                    "original": float(original),
-                    "reconstructed": float(reconstructed),
-                    "deviation": float(deviation)
-                }
-            
-            top_anomalies = sorted(feature_contributions.items(), 
-                                  key=lambda x: x[1]['deviation'], reverse=True)[:3]
-            
-            print(f"  Top Anomalous Features:")
-            for feature, stats in top_anomalies:
-                print(f"    - {feature}: deviation={stats['deviation']:.4f}")
+        if result['is_anomaly']:
+            severity = "Critical" if result['score'] > result['threshold'] * 2 else "High"
+            print(f"🚨 INSIDER THREAT DETECTED! (Severity: {severity})\n")
             
             return {
                 "engine": "UEBA",
                 "severity": severity,
                 "alertType": "Insider Threat Detected",
                 "details": {
-                    "user_profile": user_profile_data,
-                    "reconstruction_error": float(error),
-                    "anomaly_threshold": Config.UEBA_ANOMALY_THRESHOLD,
-                    "feature_contributions": feature_contributions,
-                    "top_anomalous_features": [f[0] for f in top_anomalies]
+                    "user_profile": user_profile,
+                    "reconstruction_error": result['score'],
+                    "anomaly_threshold": result['threshold'],
+                    "verdict": result['verdict'],
+                    "confidence": result.get('confidence', 0)
                 }
             }
         else:
-            print(f"  ✅ User behavior is normal")
+            print(f"✅ User behavior is normal\n")
             return None
+            
     except Exception as e:
-        logger.error(f"Error in UEBA analysis: {e}")
+        logger.error(f"UEBA Engine error: {e}")
         return None
 
-# --- 6. Artifact Engine (XGBoost) - NEW! ---
-def analyze_artifact(artifact_vector: np.ndarray, file_info: Dict[str, Any] = None) -> Optional[Dict[str, Any]]:
-    """Analyze file artifact using XGBoost malware classifier"""
-    if not ARTIFACT_PIPELINE:
-        print("  ⚠️ Artifact Engine not loaded.")
+# === ARTIFACT ENGINE ===
+def analyze_artifact(file_info: Dict = None) -> Optional[Dict]:
+    """Analyze file using Artifact engine (uses reference data for testing)"""
+    if 'artifact_engine' not in ENGINES:
+        print("⚠️  Artifact Engine not available")
         return None
     
-    print(f"\n{'='*60}")
-    print(f"  ARTIFACT ENGINE ANALYSIS (XGBoost)")
-    print(f"{'='*60}")
+    print(f"\n{'='*70}")
+    print(f"  🦠 ARTIFACT ENGINE (XGBoost)")
+    print(f"{'='*70}\n")
     
     try:
-        # Ensure vector is 2D
-        if artifact_vector.ndim == 1:
-            artifact_vector = artifact_vector.reshape(1, -1)
+        manager = ENGINES['artifact_engine']
         
-        # Pipeline handles scaling automatically
-        prediction = ARTIFACT_PIPELINE.predict(artifact_vector)
-        probabilities = ARTIFACT_PIPELINE.predict_proba(artifact_vector)[0]
+        # For testing, use reference data
+        # In real use, you'd load actual file features
+        test_case = "attack" if file_info and file_info.get('is_test_malware') else "benign"
+        test_input = manager.reference['test_cases'][test_case]['input']
         
-        result = int(prediction[0])
-        benign_prob = probabilities[0]
-        malware_prob = probabilities[1]
+        result = manager.predict(test_input)
         
-        print(f"  Prediction: {'MALWARE' if result == 1 else 'BENIGN'}")
-        print(f"  Confidence: Benign={benign_prob:.2%}, Malware={malware_prob:.2%}")
+        filename = file_info.get('filename', 'unknown.exe') if file_info else 'test_file.exe'
         
-        if result == 1:
-            severity = "Critical" if malware_prob > 0.95 else "High"
-            print(f"  🚨 MALWARE DETECTED! (Severity: {severity})")
+        print(f"File: {filename}")
+        print(f"Verdict: {result['verdict']}")
+        print(f"Confidence: {result.get('confidence', 0):.2%}\n")
+        
+        if result['is_anomaly']:
+            severity = "Critical" if result.get('confidence', 0) > 0.95 else "High"
+            print(f"🚨 MALWARE DETECTED! (Severity: {severity})\n")
             
             details = {
-                "verdict": "Malware",
-                "confidence": float(malware_prob),
-                "benign_probability": float(benign_prob),
-                "malware_probability": float(malware_prob),
-                "feature_count": len(ARTIFACT_FEATURES)
+                "verdict": result['verdict'],
+                "confidence": result.get('confidence', 0),
+                "malware_probability": result.get('confidence', 0),
+                "score": result.get('score', 0)
             }
             
             if file_info:
@@ -389,90 +363,103 @@ def analyze_artifact(artifact_vector: np.ndarray, file_info: Dict[str, Any] = No
                 "details": details
             }
         else:
-            print(f"  ✅ File is benign")
+            print(f"✅ File is benign\n")
             return None
+            
     except Exception as e:
-        logger.error(f"Error in Artifact Engine: {e}")
+        logger.error(f"Artifact Engine error: {e}")
         return None
 
-# --- 7. Alert Sending ---
-def send_alert(payload: Dict[str, Any], retry_count: int = 0):
-    """Send alert to backend API with retry logic"""
+# === SEND ALERT ===
+def send_alert(payload: Dict, retry_count: int = 0) -> bool:
+    """Send alert to backend dashboard"""
     try:
-        response = requests.post(Config.BACKEND_API_URL, json=payload, timeout=Config.API_TIMEOUT)
+        response = requests.post(
+            Config.BACKEND_API_URL,
+            json=payload,
+            timeout=Config.API_TIMEOUT
+        )
         response.raise_for_status()
-        print(f"\n{'='*60}")
+        
+        print(f"{'='*70}")
         print(f"  ✅ ALERT SENT TO DASHBOARD")
-        print(f"{'='*60}\n")
+        print(f"{'='*70}\n")
         return True
+        
     except Exception as e:
         if retry_count < Config.MAX_RETRIES:
+            logger.warning(f"Alert send failed, retrying... ({retry_count + 1}/{Config.MAX_RETRIES})")
             return send_alert(payload, retry_count + 1)
         else:
-            print(f"\n❌ Failed to send alert: {e}\n")
+            logger.error(f"Failed to send alert after {Config.MAX_RETRIES} attempts: {e}")
+            print(f"❌ Failed to send alert to dashboard\n")
             return False
 
-# --- 8. Main Execution ---
+# === MAIN ===
 if __name__ == "__main__":
-    load_models()
-    
     if len(sys.argv) < 3:
-        print("\nUsage: python detector.py <mode> <indicator>")
-        print("\nAvailable Modes:")
-        print("  traffic <anomaly|normal>     - Traffic Engine test")
-        print("  ids <attack|benign>          - IDS Engine test")
-        print("  ueba <normal|subtle|obvious> - UEBA Engine test")
-        print("  artifact <benign|malware>    - Artifact Engine test")
-        print("  threatintel <IP_ADDRESS>     - Threat Intelligence test")
+        print("\n" + "="*70)
+        print("  USAGE")
+        print("="*70)
+        print("\npython detector.py <mode> <indicator>\n")
+        print("Modes:")
+        print("  traffic <anomaly|normal>     - Test Traffic Engine")
+        print("  ids <attack|benign>          - Test IDS Engine")
+        print("  ueba <normal|obvious>        - Test UEBA Engine")
+        print("  artifact <benign|malware>    - Test Artifact Engine")
+        print("  threatintel <IP_ADDRESS>     - Test Threat Intelligence")
+        print("\nExamples:")
+        print("  python detector.py traffic anomaly")
+        print("  python detector.py ueba obvious")
+        print("  python detector.py artifact malware")
+        print("  python detector.py threatintel 8.8.8.8")
+        print()
         sys.exit(1)
     
-    mode = sys.argv[1]
-    indicator = sys.argv[2]
-    final_alert = None
+    mode = sys.argv[1].lower()
+    indicator = sys.argv[2].lower()
+    alert = None
     
+    # Route to appropriate engine
     if mode == "traffic":
         flow = ANOMALY_FLOW if indicator == "anomaly" else NORMAL_FLOW
-        print(f"\nTesting TRAFFIC ENGINE with {indicator.upper()} flow...")
-        final_alert = analyze_network_flow_traffic(flow)
+        alert = analyze_traffic(flow)
     
     elif mode == "ids":
-        flow = ATTACK_FLOW if indicator == "attack" else BENIGN_FLOW
-        print(f"\nTesting IDS ENGINE with {indicator.upper()} flow...")
-        final_alert = analyze_network_flow_ids(flow)
+        # Use reference data for testing
+        if 'ids_engine' in ENGINES:
+            manager = ENGINES['ids_engine']
+            test_case = "attack" if indicator == "attack" else "benign"
+            test_input = manager.reference['test_cases'][test_case]['input']
+            alert = analyze_ids(test_input)
+        else:
+            print("❌ IDS Engine not available")
     
     elif mode == "ueba":
-        users = {"normal": NORMAL_USER, "subtle": SUBTLE_INSIDER, "obvious": OBVIOUS_ATTACKER}
-        user = users.get(indicator, NORMAL_USER)
-        print(f"\nTesting UEBA ENGINE with {indicator.upper()} user...")
-        final_alert = analyze_user_behavior(user)
+        user = OBVIOUS_ATTACKER if indicator == "obvious" else NORMAL_USER
+        alert = analyze_ueba(user)
     
     elif mode == "artifact":
-        if indicator == "benign":
-            vector_path = "real_benign_vector.txt"
-            file_info = {"filename": "legitimate_app.exe", "size": "1.2 MB", "hash": "ABC123..."}
-        else:
-            vector_path = "real_malware_vector.txt"
-            file_info = {"filename": "suspicious.exe", "size": "850 KB", "hash": "DEF456..."}
-        
-        try:
-            vector = np.loadtxt(vector_path).reshape(1, -1)
-            print(f"\nTesting ARTIFACT ENGINE with {indicator.upper()} file...")
-            final_alert = analyze_artifact(vector, file_info)
-        except Exception as e:
-            print(f"❌ Could not load artifact vector: {e}")
+        file_info = {
+            "filename": "suspicious.exe" if indicator == "malware" else "legitimate_app.exe",
+            "size": "850 KB" if indicator == "malware" else "1.2 MB",
+            "is_test_malware": indicator == "malware"
+        }
+        alert = analyze_artifact(file_info)
     
     elif mode == "threatintel":
-        api_keys = {"ipqs": Config.IPQS_API_KEY, "vt": Config.VIRUSTOTAL_API_KEY}
-        print(f"\nTesting THREAT INTELLIGENCE with IP: {indicator}...")
-        final_alert = get_fused_threat_intelligence(indicator, api_keys)
+        ip_address = indicator
+        alert = analyze_threat_intelligence(ip_address)
     
     else:
-        print(f"Unknown mode: {mode}")
+        print(f"❌ Unknown mode: {mode}")
+        print("   Valid modes: traffic, ids, ueba, artifact, threatintel")
         sys.exit(1)
     
-    if final_alert:
-        send_alert(final_alert)
+    # Send alert if detected
+    if alert:
+        send_alert(alert)
     else:
-        print(f"\n{'='*60}")
-        print(f"  ✅ NO THREATS DETECTED - All Clear")
-        print(f"{'='*60}\n")
+        print(f"{'='*70}")
+        print(f"  ✅ NO THREATS DETECTED")
+        print(f"{'='*70}\n")
