@@ -1,305 +1,179 @@
-// src/App.js (Enhanced Version with All Features)
-import React, { useState, useEffect, useCallback } from 'react';
+// src/App.js - AEGIS Command Center
+import React, { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import io from 'socket.io-client';
 import './App.css';
-import AlertDetails from './components/AlertDetails';
 
-const SOCKET_SERVER_URL = process.env.REACT_APP_BACKEND_URL || "http://localhost:5000";
+// Import pages
+import Dashboard from './pages/Dashboard';
+import LiveFeed from './pages/LiveFeed';
+import Incidents from './pages/Incidents';
+import Forensics from './pages/Forensics';
+
+// Import components
+import Toast from './components/Toast';
+
+const SOCKET_SERVER_URL = "http://localhost:5000";
 
 function App() {
   const [alerts, setAlerts] = useState([]);
   const [isConnected, setIsConnected] = useState(false);
-  const [expandedAlertId, setExpandedAlertId] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [toast, setToast] = useState(null);
   const [stats, setStats] = useState(null);
-  
-  // Filter states
-  const [severityFilter, setSeverityFilter] = useState('all');
-  const [engineFilter, setEngineFilter] = useState('all');
-  const [searchTerm, setSearchTerm] = useState('');
 
-  // Fetch historical alerts on mount
+  // Socket.io connection
   useEffect(() => {
-    const fetchAlerts = async () => {
-      try {
-        const response = await fetch(`${SOCKET_SERVER_URL}/api/alerts?limit=50`);
-        const data = await response.json();
-        setAlerts(data.alerts || []);
-        setLoading(false);
-      } catch (error) {
-        console.error("Error fetching alerts:", error);
-        setLoading(false);
+    const socket = io(SOCKET_SERVER_URL);
+    
+    socket.on('connect', () => {
+      setIsConnected(true);
+      console.log('✅ Connected to AEGIS backend');
+    });
+    
+    socket.on('disconnect', () => {
+      setIsConnected(false);
+      console.log('❌ Disconnected from AEGIS backend');
+    });
+    
+    socket.on('new-alert', (newAlert) => {
+      console.log('🚨 New alert received:', newAlert.alertType);
+      
+      // Add to alerts list
+      setAlerts(prevAlerts => [newAlert, ...prevAlerts]);
+      
+      // Show toast notification
+      if (newAlert.engine === "CORRELATION BRAIN") {
+        // Critical incident - special notification
+        setToast({
+          type: 'critical',
+          title: '🚨 CRITICAL INCIDENT',
+          message: newAlert.alertType,
+          duration: 10000
+        });
+        
+        // Play sound (optional)
+        playAlertSound();
+      } else if (newAlert.severity === 'Critical') {
+        setToast({
+          type: 'error',
+          title: 'Critical Alert',
+          message: `${newAlert.engine}: ${newAlert.alertType}`,
+          duration: 5000
+        });
       }
+    });
+    
+    return () => {
+      socket.disconnect();
     };
-
-    fetchAlerts();
   }, []);
 
-  // Fetch statistics
+  // Fetch initial data
   useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const response = await fetch(`${SOCKET_SERVER_URL}/api/alerts/stats/summary`);
-        const data = await response.json();
-        setStats(data);
-      } catch (error) {
-        console.error("Error fetching statistics:", error);
-      }
-    };
-
+    fetchInitialAlerts();
     fetchStats();
+    
     // Refresh stats every 30 seconds
     const interval = setInterval(fetchStats, 30000);
     return () => clearInterval(interval);
   }, []);
 
-  // WebSocket connection
-  useEffect(() => {
-    const socket = io(SOCKET_SERVER_URL);
-    
-    socket.on('connect', () => {
-      console.log('Connected to WebSocket');
-      setIsConnected(true);
-    });
-    
-    socket.on('disconnect', () => {
-      console.log('Disconnected from WebSocket');
-      setIsConnected(false);
-    });
-    
-    socket.on('new-alert', (newAlert) => {
-      console.log('Received new alert:', newAlert);
-      setAlerts(prevAlerts => [newAlert, ...prevAlerts]);
-      
-      // Update stats
-      setStats(prev => prev ? {
-        ...prev,
-        total: prev.total + 1,
-        recentLast24h: prev.recentLast24h + 1,
-        bySeverity: {
-          ...prev.bySeverity,
-          [newAlert.severity]: (prev.bySeverity[newAlert.severity] || 0) + 1
-        },
-        byEngine: {
-          ...prev.byEngine,
-          [newAlert.engine]: (prev.byEngine[newAlert.engine] || 0) + 1
-        }
-      } : null);
-      
-      // Show browser notification if permitted
-      if (Notification.permission === "granted") {
-        new Notification(`${newAlert.severity} Alert`, {
-          body: `${newAlert.engine}: ${newAlert.alertType}`,
-          icon: '/alert-icon.png'
-        });
-      }
-    });
-    
-    return () => { 
-      socket.disconnect(); 
-    };
-  }, []);
-
-  // Request notification permission on mount
-  useEffect(() => {
-    if (Notification.permission === "default") {
-      Notification.requestPermission();
+  const fetchInitialAlerts = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/api/alerts?limit=100');
+      const data = await response.json();
+      setAlerts(data.alerts || []);
+    } catch (error) {
+      console.error('Error fetching alerts:', error);
     }
-  }, []);
-
-  const handleAlertClick = (alertId) => {
-    setExpandedAlertId(currentId => currentId === alertId ? null : alertId);
   };
 
-  // Filter alerts
-  const filteredAlerts = alerts.filter(alert => {
-    // Severity filter
-    if (severityFilter !== 'all' && alert.severity !== severityFilter) {
-      return false;
+  const fetchStats = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/api/stats');
+      const data = await response.json();
+      setStats(data);
+    } catch (error) {
+      console.error('Error fetching stats:', error);
     }
-    
-    // Engine filter
-    if (engineFilter !== 'all' && alert.engine !== engineFilter) {
-      return false;
-    }
-    
-    // Search term
-    if (searchTerm) {
-      const searchLower = searchTerm.toLowerCase();
-      return (
-        alert.alertType.toLowerCase().includes(searchLower) ||
-        alert.engine.toLowerCase().includes(searchLower) ||
-        JSON.stringify(alert.details).toLowerCase().includes(searchLower)
-      );
-    }
-    
-    return true;
-  });
-
-  // Clear all filters
-  const clearFilters = () => {
-    setSeverityFilter('all');
-    setEngineFilter('all');
-    setSearchTerm('');
   };
 
-  const hasActiveFilters = severityFilter !== 'all' || engineFilter !== 'all' || searchTerm !== '';
+  const playAlertSound = () => {
+    // Optional: Add alert sound
+    // const audio = new Audio('/alert-sound.mp3');
+    // audio.play().catch(e => console.log('Could not play sound'));
+  };
 
   return (
-    <div className="App">
-      <header className="App-header">
-        <div className="header-content">
-          <div className="header-title">
-            <h1>🛡️ AI-Based Security Monitoring</h1>
-            <p className={`status ${isConnected ? 'connected' : 'disconnected'}`}>
-              <span className="status-indicator"></span>
-              {isConnected ? 'Live' : 'Disconnected'}
-            </p>
-          </div>
-          
-          {stats && (
-            <div className="header-stats">
-              <div className="stat-card">
-                <div className="stat-value">{stats.total}</div>
-                <div className="stat-label">Total Alerts</div>
-              </div>
-              <div className="stat-card">
-                <div className="stat-value">{stats.recentLast24h}</div>
-                <div className="stat-label">Last 24h</div>
-              </div>
-              <div className="stat-card critical">
-                <div className="stat-value">{stats.bySeverity?.Critical || 0}</div>
-                <div className="stat-label">Critical</div>
-              </div>
-              <div className="stat-card high">
-                <div className="stat-value">{stats.bySeverity?.High || 0}</div>
-                <div className="stat-label">High</div>
-              </div>
-            </div>
-          )}
-        </div>
-      </header>
+    <Router>
+      <div className="app-container">
+        <Navigation isConnected={isConnected} />
+        
+        <main className="main-content">
+          <Routes>
+            <Route path="/" element={<Dashboard stats={stats} refreshStats={fetchStats} />} />
+            <Route path="/feed" element={<LiveFeed alerts={alerts} />} />
+            <Route path="/incidents" element={<Incidents alerts={alerts} />} />
+            <Route path="/forensics" element={<Forensics />} />
+          </Routes>
+        </main>
+        
+        {toast && (
+          <Toast 
+            {...toast} 
+            onClose={() => setToast(null)} 
+          />
+        )}
+      </div>
+    </Router>
+  );
+}
 
-      <div className="controls-container">
-        <div className="filters">
-          <div className="filter-group">
-            <label>Severity:</label>
-            <select 
-              value={severityFilter} 
-              onChange={(e) => setSeverityFilter(e.target.value)}
-              className="filter-select"
-            >
-              <option value="all">All Severities</option>
-              <option value="Critical">Critical</option>
-              <option value="High">High</option>
-              <option value="Medium">Medium</option>
-              <option value="Low">Low</option>
-            </select>
-          </div>
-
-          <div className="filter-group">
-            <label>Engine:</label>
-            <select 
-              value={engineFilter} 
-              onChange={(e) => setEngineFilter(e.target.value)}
-              className="filter-select"
-            >
-              <option value="all">All Engines</option>
-              <option value="IDS">IDS</option>
-              <option value="Traffic Engine">Traffic Engine</option>
-              <option value="Threat Intelligence">Threat Intelligence</option>
-              <option value="UEBA">UEBA</option>
-              <option value="Artifact Engine">Artifact Engine</option>
-            </select>
-          </div>
-
-          <div className="filter-group search-group">
-            <label>Search:</label>
-            <input
-              type="text"
-              placeholder="Search alerts..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="search-input"
-            />
-          </div>
-
-          {hasActiveFilters && (
-            <button onClick={clearFilters} className="clear-filters-btn">
-              Clear Filters
-            </button>
-          )}
-        </div>
-
-        <div className="results-info">
-          Showing {filteredAlerts.length} of {alerts.length} alerts
+// Navigation Component
+function Navigation({ isConnected }) {
+  const location = useLocation();
+  
+  const navItems = [
+    { path: '/', label: 'Dashboard', icon: '📊' },
+    { path: '/feed', label: 'Live Feed', icon: '📡' },
+    { path: '/incidents', label: 'Incidents', icon: '🚨' },
+    { path: '/forensics', label: 'Forensics', icon: '🔍' }
+  ];
+  
+  return (
+    <nav className="sidebar">
+      <div className="sidebar-header">
+        <h1 className="logo">🛡️ AEGIS</h1>
+        <div className={`status-indicator ${isConnected ? 'connected' : 'disconnected'}`}>
+          <span className="status-dot"></span>
+          {isConnected ? 'Connected' : 'Disconnected'}
         </div>
       </div>
       
-      <div className="alert-container">
-        {loading ? (
-          <div className="loading">Loading alerts...</div>
-        ) : filteredAlerts.length === 0 ? (
-          <div className="no-alerts">
-            {hasActiveFilters ? (
-              <p>No alerts match your filters.</p>
-            ) : (
-              <p>No alerts received yet. Waiting for security events...</p>
-            )}
+      <ul className="nav-menu">
+        {navItems.map(item => (
+          <li key={item.path} className={location.pathname === item.path ? 'active' : ''}>
+            <Link to={item.path}>
+              <span className="nav-icon">{item.icon}</span>
+              <span className="nav-label">{item.label}</span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+      
+      <div className="sidebar-footer">
+        <div className="system-info">
+          <div className="info-item">
+            <span className="info-label">Version</span>
+            <span className="info-value">1.0.0</span>
           </div>
-        ) : (
-          <ul className="alert-list">
-            {filteredAlerts.map((alert) => (
-              <li key={alert._id} 
-                  className={`alert-item severity-${alert.severity.toLowerCase()}`}
-                  onClick={() => handleAlertClick(alert._id)}>
-                
-                <div className="alert-summary">
-                  <div className="alert-header">
-                    <span className={`alert-engine engine-${alert.engine.replace(/\s+/g, '-').toLowerCase()}`}>
-                      {alert.engine}
-                    </span>
-                    <span className="alert-timestamp">
-                      {new Date(alert.timestamp).toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="alert-body">
-                    <div className="alert-title">
-                      <span className={`severity-badge severity-${alert.severity.toLowerCase()}`}>
-                        {alert.severity}
-                      </span>
-                      <strong>{alert.alertType}</strong>
-                    </div>
-                    <div className="alert-preview">
-                      {alert.details.ip_address && (
-                        <span className="detail-chip">IP: {alert.details.ip_address}</span>
-                      )}
-                      {alert.details.threat_score && (
-                        <span className="detail-chip">Score: {alert.details.threat_score}</span>
-                      )}
-                      {alert.details.reconstruction_error && (
-                        <span className="detail-chip">
-                          Error: {alert.details.reconstruction_error.toFixed(6)}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="expand-indicator">
-                    {expandedAlertId === alert._id ? '▼' : '▶'}
-                  </div>
-                </div>
-
-                {expandedAlertId === alert._id && (
-                  <div className="alert-details-container">
-                    <AlertDetails alert={alert} />
-                  </div>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
+          <div className="info-item">
+            <span className="info-label">System</span>
+            <span className="info-value">Operational</span>
+          </div>
+        </div>
       </div>
-    </div>
+    </nav>
   );
 }
 

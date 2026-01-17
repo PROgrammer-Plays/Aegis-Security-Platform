@@ -1,5 +1,4 @@
-// server.js (Enhanced Version with All Fixes)
-
+// server.js - AEGIS Command Center Backend
 require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
@@ -7,252 +6,274 @@ const cors = require('cors');
 const http = require('http');
 const { Server } = require("socket.io");
 
-// --- 1. SETUP ---
+// === SETUP ===
 const app = express();
 const PORT = process.env.BackEnd_PORT || 5000;
 
-// --- 2. MIDDLEWARE ---
-app.use(cors()); // Standard CORS for your REST API
-app.use(express.json()); // To parse JSON bodies
+// === MIDDLEWARE ===
+app.use(cors());
+app.use(express.json());
 
-// --- 3. DATABASE CONNECTION ---
+// === DATABASE CONNECTION ===
 mongoose.connect(process.env.ATLAS_URI)
-    .then(() => console.log("MongoDB database connection established successfully"))
-    .catch(err => {
-        console.error("MongoDB connection error:", err);
-        process.exit(1); // Exit if database connection fails
-    });
+    .then(() => console.log("✅ MongoDB connected"))
+    .catch(err => console.error("❌ MongoDB error:", err));
 
-// --- 4. CREATE A SINGLE HTTP SERVER & SOCKET.IO INSTANCE ---
+// === HTTP SERVER & SOCKET.IO ===
 const server = http.createServer(app);
 const io = new Server(server, {
     cors: {
-        origin: process.env.FRONTEND_URL || "http://localhost:3000",
+        origin: "http://localhost:3000",
         methods: ["GET", "POST"]
     }
 });
 
-// --- 5. DEFINE THE ALERT MODEL ---
+// === ALERT MODEL ===
 const Alert = require('./models/Alert');
 
-// --- 6. INPUT VALIDATION MIDDLEWARE ---
-const validateAlert = (req, res, next) => {
-    const { engine, severity, alertType } = req.body;
-    
-    if (!engine || !severity || !alertType) {
-        return res.status(400).json({ 
-            message: "Missing required fields", 
-            required: ["engine", "severity", "alertType"] 
-        });
-    }
-    
-    const validEngines = ["IDS", "Traffic Engine", "Threat Intelligence", "UEBA", "Artifact Engine"];
-    const validSeverities = ["Low", "Medium", "High", "Critical"];
-    
-    if (!validEngines.includes(engine)) {
-        return res.status(400).json({ 
-            message: "Invalid engine", 
-            validEngines 
-        });
-    }
-    
-    if (!validSeverities.includes(severity)) {
-        return res.status(400).json({ 
-            message: "Invalid severity", 
-            validSeverities 
-        });
-    }
-    
-    next();
-};
+// === API ENDPOINTS ===
 
-// --- 7. API ENDPOINTS ---
-
-// POST: Create new alert
-app.post('/api/alerts', validateAlert, async (req, res) => {
-    console.log("Received new alert via POST request.....");
+// POST /api/alerts - Receive new alert from detector
+app.post('/api/alerts', async (req, res) => {
+    console.log(`\n[${new Date().toISOString()}] New alert received`);
+    console.log(`Engine: ${req.body.engine}`);
+    console.log(`Type: ${req.body.alertType}`);
+    console.log(`Severity: ${req.body.severity}`);
+    
     const newAlert = new Alert(req.body);
     
     try {
         const savedAlert = await newAlert.save();
-        console.log("Alert saved to database:", savedAlert._id);
-        
-        console.log(`[DEBUG] Broadcasting 'new-alert' to ${io.engine.clientsCount} connected clients.`);
+        console.log(`✅ Alert saved to database (ID: ${savedAlert._id})`);
         
         // Broadcast to all connected clients
         io.emit('new-alert', savedAlert);
+        console.log(`📡 Broadcasted to ${io.engine.clientsCount} client(s)\n`);
         
-        console.log("Broadcasted new alert to connected clients.");
         res.status(201).json(savedAlert);
-
     } catch (error) {
-        console.error("Error saving alert:", error);
-        res.status(400).json({ message: "Error saving alert", error: error.message });
+        console.error("❌ Error saving alert:", error);
+        res.status(400).json({ message: "Error saving alert", error });
     }
 });
 
-// GET: Fetch recent alerts with pagination
+// GET /api/alerts - Retrieve alerts with pagination and filters
 app.get('/api/alerts', async (req, res) => {
     try {
-        const limit = parseInt(req.query.limit) || 50;
-        const skip = parseInt(req.query.skip) || 0;
-        const severity = req.query.severity;
-        const engine = req.query.engine;
+        const { 
+            page = 1, 
+            limit = 50, 
+            severity, 
+            engine,
+            startDate,
+            endDate,
+            search
+        } = req.query;
         
-        // Build query
-        let query = {};
-        if (severity) query.severity = severity;
-        if (engine) query.engine = engine;
+        // Build filter query
+        let filter = {};
         
-        const alerts = await Alert.find(query)
+        if (severity) {
+            filter.severity = severity;
+        }
+        
+        if (engine) {
+            filter.engine = engine;
+        }
+        
+        if (startDate || endDate) {
+            filter.timestamp = {};
+            if (startDate) filter.timestamp.$gte = new Date(startDate);
+            if (endDate) filter.timestamp.$lte = new Date(endDate);
+        }
+        
+        if (search) {
+            filter.$or = [
+                { alertType: { $regex: search, $options: 'i' } },
+                { engine: { $regex: search, $options: 'i' } },
+                { 'details.ip_address': { $regex: search, $options: 'i' } },
+                { 'details.user_id': { $regex: search, $options: 'i' } }
+            ];
+        }
+        
+        // Execute query with pagination
+        const alerts = await Alert.find(filter)
             .sort({ timestamp: -1 })
-            .limit(limit)
-            .skip(skip);
+            .limit(limit * 1)
+            .skip((page - 1) * limit)
+            .exec();
         
-        const total = await Alert.countDocuments(query);
+        const count = await Alert.countDocuments(filter);
         
         res.json({
             alerts,
-            total,
-            limit,
-            skip
+            totalPages: Math.ceil(count / limit),
+            currentPage: page,
+            total: count
         });
+        
     } catch (error) {
         console.error("Error fetching alerts:", error);
-        res.status(500).json({ message: "Error fetching alerts", error: error.message });
+        res.status(500).json({ error: error.message });
     }
 });
 
-// GET: Fetch single alert by ID
-app.get('/api/alerts/:id', async (req, res) => {
+// GET /api/stats - Dashboard statistics
+app.get('/api/stats', async (req, res) => {
     try {
-        const alert = await Alert.findById(req.params.id);
-        if (!alert) {
-            return res.status(404).json({ message: "Alert not found" });
-        }
-        res.json(alert);
-    } catch (error) {
-        console.error("Error fetching alert:", error);
-        res.status(500).json({ message: "Error fetching alert", error: error.message });
-    }
-});
-
-// GET: Alert statistics
-app.get('/api/alerts/stats/summary', async (req, res) => {
-    try {
-        const total = await Alert.countDocuments();
+        const { hours = 24 } = req.query;
+        const timeAgo = new Date(Date.now() - hours * 60 * 60 * 1000);
         
-        const bySeverity = await Alert.aggregate([
+        // 1. Total alerts
+        const total = await Alert.countDocuments();
+        const recent = await Alert.countDocuments({ timestamp: { $gte: timeAgo } });
+        
+        // 2. Severity breakdown
+        const severityCounts = await Alert.aggregate([
+            { $match: { timestamp: { $gte: timeAgo } } },
             { $group: { _id: "$severity", count: { $sum: 1 } } }
         ]);
         
-        const byEngine = await Alert.aggregate([
+        // 3. Engine breakdown
+        const engineCounts = await Alert.aggregate([
+            { $match: { timestamp: { $gte: timeAgo } } },
             { $group: { _id: "$engine", count: { $sum: 1 } } }
         ]);
         
-        const recent = await Alert.countDocuments({
-            timestamp: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }
-        });
+        // 4. Recent incidents (Correlation Brain)
+        const recentIncidents = await Alert.find({ 
+            engine: "CORRELATION BRAIN",
+            timestamp: { $gte: timeAgo }
+        })
+        .sort({ timestamp: -1 })
+        .limit(10);
+        
+        // 5. Hourly trend
+        const hourlyTrend = await Alert.aggregate([
+            { $match: { timestamp: { $gte: timeAgo } } },
+            { 
+                $group: {
+                    _id: { 
+                        $dateToString: { 
+                            format: "%Y-%m-%d %H:00", 
+                            date: "$timestamp" 
+                        }
+                    },
+                    count: { $sum: 1 }
+                }
+            },
+            { $sort: { _id: 1 } }
+        ]);
+        
+        // 6. Top entities (IPs/Users)
+        const topEntities = await Alert.aggregate([
+            { $match: { timestamp: { $gte: timeAgo } } },
+            {
+                $group: {
+                    _id: {
+                        $ifNull: [
+                            "$details.ip_address",
+                            { $ifNull: ["$details.source_ip", "$details.user_id"] }
+                        ]
+                    },
+                    count: { $sum: 1 },
+                    maxSeverity: { $max: "$severity" }
+                }
+            },
+            { $match: { _id: { $ne: null } } },
+            { $sort: { count: -1 } },
+            { $limit: 10 }
+        ]);
         
         res.json({
-            total,
-            recentLast24h: recent,
-            bySeverity: bySeverity.reduce((acc, item) => {
+            overview: {
+                total,
+                recent,
+                incidents: recentIncidents.length
+            },
+            severityCounts: severityCounts.reduce((acc, item) => {
                 acc[item._id] = item.count;
                 return acc;
             }, {}),
-            byEngine: byEngine.reduce((acc, item) => {
+            engineCounts: engineCounts.reduce((acc, item) => {
                 acc[item._id] = item.count;
                 return acc;
-            }, {})
+            }, {}),
+            recentIncidents,
+            hourlyTrend,
+            topEntities,
+            timeRange: { hours, from: timeAgo }
         });
+        
     } catch (error) {
-        console.error("Error fetching statistics:", error);
-        res.status(500).json({ message: "Error fetching statistics", error: error.message });
+        console.error("Error fetching stats:", error);
+        res.status(500).json({ error: error.message });
     }
 });
 
-// DELETE: Clear old alerts (optional - for testing)
-app.delete('/api/alerts/clear/all', async (req, res) => {
+// GET /api/incidents - Get correlation incidents only
+app.get('/api/incidents', async (req, res) => {
     try {
-        // Only allow in development
-        if (process.env.NODE_ENV === 'production') {
-            return res.status(403).json({ message: "Not allowed in production" });
+        const { limit = 20 } = req.query;
+        
+        const incidents = await Alert.find({ engine: "CORRELATION BRAIN" })
+            .sort({ timestamp: -1 })
+            .limit(limit * 1)
+            .exec();
+        
+        res.json(incidents);
+        
+    } catch (error) {
+        console.error("Error fetching incidents:", error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// GET /api/alert/:id - Get single alert details
+app.get('/api/alert/:id', async (req, res) => {
+    try {
+        const alert = await Alert.findById(req.params.id);
+        
+        if (!alert) {
+            return res.status(404).json({ message: "Alert not found" });
         }
         
-        const result = await Alert.deleteMany({});
-        res.json({ message: `Deleted ${result.deletedCount} alerts` });
+        res.json(alert);
+        
     } catch (error) {
-        console.error("Error clearing alerts:", error);
-        res.status(500).json({ message: "Error clearing alerts", error: error.message });
+        console.error("Error fetching alert:", error);
+        res.status(500).json({ error: error.message });
     }
 });
 
-// Health check endpoint
-app.get('/api/health', async (req, res) => {
-    const health = {
-        status: 'OK',
-        timestamp: new Date().toISOString(),
-        uptime: process.uptime(),
-        database: mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected',
-        connectedClients: io.engine.clientsCount
-    };
-    res.json(health);
+// DELETE /api/alerts - Clear all alerts (for testing)
+app.delete('/api/alerts', async (req, res) => {
+    try {
+        const result = await Alert.deleteMany({});
+        console.log(`🗑️  Deleted ${result.deletedCount} alerts`);
+        res.json({ message: `Deleted ${result.deletedCount} alerts` });
+    } catch (error) {
+        console.error("Error deleting alerts:", error);
+        res.status(500).json({ error: error.message });
+    }
 });
 
-// --- 8. WEBSOCKET CONNECTION LOGIC ---
+// === WEBSOCKET ===
 io.on('connection', (socket) => {
-    console.log(`[OK] A user connected via WebSocket: ${socket.id}`);
-    
-    // Send current statistics on connection
-    Alert.countDocuments().then(count => {
-        socket.emit('initial-stats', { totalAlerts: count });
-    });
+    console.log(`✅ Client connected: ${socket.id}`);
     
     socket.on('disconnect', () => {
-        console.log(`[DISCONNECT] User disconnected: ${socket.id}`);
-    });
-    
-    // Handle client requesting recent alerts
-    socket.on('request-recent-alerts', async (data) => {
-        try {
-            const limit = data?.limit || 20;
-            const alerts = await Alert.find()
-                .sort({ timestamp: -1 })
-                .limit(limit);
-            socket.emit('recent-alerts', alerts);
-        } catch (error) {
-            console.error("Error fetching recent alerts:", error);
-            socket.emit('error', { message: "Failed to fetch recent alerts" });
-        }
+        console.log(`❌ Client disconnected: ${socket.id}`);
     });
 });
 
-// --- 9. ERROR HANDLING MIDDLEWARE ---
-app.use((err, req, res, next) => {
-    console.error("Unhandled error:", err);
-    res.status(500).json({ 
-        message: "Internal server error", 
-        error: process.env.NODE_ENV === 'development' ? err.message : undefined 
-    });
-});
-
-// --- 10. GRACEFUL SHUTDOWN ---
-process.on('SIGTERM', () => {
-    console.log('SIGTERM received, closing server gracefully...');
-    server.close(() => {
-        mongoose.connection.close(false, () => {
-            console.log('Server closed');
-            process.exit(0);
-        });
-    });
-});
-
-// --- 11. START THE SERVER ---
+// === START SERVER ===
 server.listen(PORT, () => {
-    console.log(`Server is running on port: ${PORT}`);
-    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:3000'}`);
+    console.log("\n" + "=".repeat(60));
+    console.log("  🛡️  AEGIS COMMAND CENTER - Backend Ready");
+    console.log("=".repeat(60));
+    console.log(`  Server: http://localhost:${PORT}`);
+    console.log(`  WebSocket: Active`);
+    console.log(`  Database: Connected`);
+    console.log("=".repeat(60) + "\n");
 });
-
-module.exports = { app, server, io }; // Export for testing

@@ -1,5 +1,7 @@
 # Ignore environment variables file
 .env
+.env.local
+.env*
 .joblib
 # It's also a good idea to ignore other common files
 # For Python:
