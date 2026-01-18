@@ -1,5 +1,5 @@
-// src/pages/Forensics.js - Fixed with useCallback
-import React, { useState, useEffect, useCallback } from 'react';
+// src/pages/Forensics.js - Search & History
+import React, { useState, useEffect } from 'react';
 import './Forensics.css';
 
 function Forensics() {
@@ -14,7 +14,11 @@ function Forensics() {
   });
   const [selectedAlert, setSelectedAlert] = useState(null);
 
-  const fetchAlerts = useCallback(async () => {
+  useEffect(() => {
+    fetchAlerts();
+  }, []);
+
+  const fetchAlerts = async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams({
@@ -30,11 +34,7 @@ function Forensics() {
       console.error('Error fetching alerts:', error);
     }
     setLoading(false);
-  }, [filters, searchTerm]);
-
-  useEffect(() => {
-    fetchAlerts();
-  }, [fetchAlerts]);
+  };
 
   const handleSearch = (e) => {
     e.preventDefault();

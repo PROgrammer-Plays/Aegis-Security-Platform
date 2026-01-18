@@ -1,28 +1,52 @@
-// src/App.js - AEGIS Command Center
+// src/App.js - Merged Real-Time + RBAC
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import io from 'socket.io-client';
 import './App.css';
 
-// Import pages
+// --- Import Pages (From your local files) ---
+import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import LiveFeed from './pages/LiveFeed';
 import Incidents from './pages/Incidents';
 import Forensics from './pages/Forensics';
 
-// Import components
+// --- Import Admin/Employee Pages (From RBAC Sprint) ---
+import AdminDashboard from './pages/AdminDashboard';
+import UserManagement from './pages/UserManagement';
+import MySecurityStatus from './pages/MySecurityStatus';
+
+// --- Import Components ---
 import Toast from './components/Toast';
 
 const SOCKET_SERVER_URL = "http://localhost:5000";
 
 function App() {
+  // --- 1. Combined State (Auth + Data) ---
+  const [token, setToken] = useState(localStorage.getItem('token'));
+  const [role, setRole] = useState(localStorage.getItem('role'));
+  const [loading, setLoading] = useState(true);
+
   const [alerts, setAlerts] = useState([]);
+  const [stats, setStats] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   const [toast, setToast] = useState(null);
-  const [stats, setStats] = useState(null);
 
-  // Socket.io connection
+  // --- 2. Auth Check on Mount ---
   useEffect(() => {
+    const storedToken = localStorage.getItem('token');
+    const storedRole = localStorage.getItem('role');
+    if (storedToken) {
+      setToken(storedToken);
+      setRole(storedRole);
+    }
+    setLoading(false);
+  }, []);
+
+  // --- 3. Socket.IO Connection (Only runs if authenticated) ---
+  useEffect(() => {
+    if (!token) return;
+
     const socket = io(SOCKET_SERVER_URL);
     
     socket.on('connect', () => {
@@ -38,21 +62,16 @@ function App() {
     socket.on('new-alert', (newAlert) => {
       console.log('🚨 New alert received:', newAlert.alertType);
       
-      // Add to alerts list
       setAlerts(prevAlerts => [newAlert, ...prevAlerts]);
       
-      // Show toast notification
+      // Toast Logic from Old Code
       if (newAlert.engine === "CORRELATION BRAIN") {
-        // Critical incident - special notification
         setToast({
           type: 'critical',
           title: '🚨 CRITICAL INCIDENT',
           message: newAlert.alertType,
           duration: 10000
         });
-        
-        // Play sound (optional)
-        playAlertSound();
       } else if (newAlert.severity === 'Critical') {
         setToast({
           type: 'error',
@@ -66,55 +85,100 @@ function App() {
     return () => {
       socket.disconnect();
     };
-  }, []);
+  }, [token]);
 
-  // Fetch initial data
+  // --- 4. Data Fetching (Only runs if authenticated) ---
   useEffect(() => {
+    if (!token) return;
+
+    const fetchInitialAlerts = async () => {
+      try {
+        const response = await fetch('http://localhost:5000/api/alerts?limit=100', {
+            headers: { 'Authorization': token }
+        });
+        const data = await response.json();
+        setAlerts(Array.isArray(data) ? data : data.alerts || []);
+      } catch (error) {
+        console.error('Error fetching alerts:', error);
+      }
+    };
+
+    const fetchStats = async () => {
+      try {
+        const response = await fetch('http://localhost:5000/api/stats', {
+            headers: { 'Authorization': token }
+        });
+        const data = await response.json();
+        setStats(data);
+      } catch (error) {
+        console.error('Error fetching stats:', error);
+      }
+    };
+
     fetchInitialAlerts();
     fetchStats();
     
-    // Refresh stats every 30 seconds
     const interval = setInterval(fetchStats, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [token]);
 
-  const fetchInitialAlerts = async () => {
-    try {
-      const response = await fetch('http://localhost:5000/api/alerts?limit=100');
-      const data = await response.json();
-      setAlerts(data.alerts || []);
-    } catch (error) {
-      console.error('Error fetching alerts:', error);
-    }
-  };
+  // --- 5. Render Logic ---
 
-  const fetchStats = async () => {
-    try {
-      const response = await fetch('http://localhost:5000/api/stats');
-      const data = await response.json();
-      setStats(data);
-    } catch (error) {
-      console.error('Error fetching stats:', error);
-    }
-  };
+  if (loading) return <div className="app-loading">Loading...</div>;
 
-  const playAlertSound = () => {
-    // Optional: Add alert sound
-    // const audio = new Audio('/alert-sound.mp3');
-    // audio.play().catch(e => console.log('Could not play sound'));
-  };
+  // If not logged in, show Login
+  if (!token) {
+    return <Login setToken={(t, r) => {
+        localStorage.setItem('token', t);
+        localStorage.setItem('role', r); // Ensure Login page passes role back
+        setToken(t);
+        setRole(r);
+    }} />;
+  }
 
   return (
     <Router>
       <div className="app-container">
-        <Navigation isConnected={isConnected} />
+        {/* Pass role to Navigation to hide/show links */}
+        <Navigation isConnected={isConnected} role={role} />
         
         <main className="main-content">
           <Routes>
-            <Route path="/" element={<Dashboard stats={stats} refreshStats={fetchStats} />} />
-            <Route path="/feed" element={<LiveFeed alerts={alerts} />} />
-            <Route path="/incidents" element={<Incidents alerts={alerts} />} />
-            <Route path="/forensics" element={<Forensics />} />
+            {/* --- ADMIN ROUTES --- */}
+            {role === 'admin' && (
+              <>
+                <Route path="/" element={<AdminDashboard />} />
+                <Route path="/admin-dashboard" element={<AdminDashboard />} />
+                <Route path="/users" element={<UserManagement />} />
+                {/* Admin can also view operational pages */}
+                <Route path="/dashboard" element={<Dashboard stats={stats} />} />
+                <Route path="/feed" element={<LiveFeed alerts={alerts} />} />
+                <Route path="/incidents" element={<Incidents alerts={alerts} />} />
+                <Route path="/forensics" element={<Forensics />} />
+              </>
+            )}
+            
+            {/* --- SENIOR ROUTES --- */}
+            {role === 'senior' && (
+              <>
+                <Route path="/" element={<Dashboard stats={stats} />} />
+                <Route path="/dashboard" element={<Dashboard stats={stats} />} />
+                <Route path="/feed" element={<LiveFeed alerts={alerts} />} />
+                <Route path="/incidents" element={<Incidents alerts={alerts} />} />
+                <Route path="/forensics" element={<Forensics />} />
+              </>
+            )}
+            
+            {/* --- EMPLOYEE ROUTES --- */}
+            {role === 'employee' && (
+              <>
+                <Route path="/" element={<MySecurityStatus alerts={alerts} />} />
+                <Route path="/my-status" element={<MySecurityStatus alerts={alerts} />} />
+              </>
+            )}
+
+            {/* Fallback */}
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
         
@@ -129,16 +193,34 @@ function App() {
   );
 }
 
-// Navigation Component
-function Navigation({ isConnected }) {
+// --- Combined Navigation Component ---
+function Navigation({ isConnected, role }) {
   const location = useLocation();
   
-  const navItems = [
-    { path: '/', label: 'Dashboard', icon: '📊' },
-    { path: '/feed', label: 'Live Feed', icon: '📡' },
-    { path: '/incidents', label: 'Incidents', icon: '🚨' },
-    { path: '/forensics', label: 'Forensics', icon: '🔍' }
-  ];
+  // Define menu items per role
+  let navItems = [];
+
+  if (role === 'admin') {
+    navItems = [
+        { path: '/', label: 'Admin Overview', icon: '👑' },
+        { path: '/users', label: 'User Mgmt', icon: '👥' },
+        { path: '/dashboard', label: 'Ops Dashboard', icon: '📊' },
+        { path: '/feed', label: 'Live Feed', icon: '📡' },
+        { path: '/incidents', label: 'War Room', icon: '🚨' },
+        { path: '/forensics', label: 'Forensics', icon: '🔍' }
+    ];
+  } else if (role === 'senior') {
+    navItems = [
+        { path: '/', label: 'Dashboard', icon: '📊' },
+        { path: '/feed', label: 'Live Feed', icon: '📡' },
+        { path: '/incidents', label: 'War Room', icon: '🚨' },
+        { path: '/forensics', label: 'Forensics', icon: '🔍' }
+    ];
+  } else if (role === 'employee') {
+    navItems = [
+        { path: '/', label: 'My Status', icon: '🛡️' }
+    ];
+  }
   
   return (
     <nav className="sidebar">
@@ -148,6 +230,7 @@ function Navigation({ isConnected }) {
           <span className="status-dot"></span>
           {isConnected ? 'Connected' : 'Disconnected'}
         </div>
+        <div className="user-role-badge">{role ? role.toUpperCase() : ''}</div>
       </div>
       
       <ul className="nav-menu">
@@ -162,16 +245,12 @@ function Navigation({ isConnected }) {
       </ul>
       
       <div className="sidebar-footer">
-        <div className="system-info">
-          <div className="info-item">
-            <span className="info-label">Version</span>
-            <span className="info-value">1.0.0</span>
-          </div>
-          <div className="info-item">
-            <span className="info-label">System</span>
-            <span className="info-value">Operational</span>
-          </div>
-        </div>
+        <button onClick={() => {
+            localStorage.clear();
+            window.location.reload();
+        }} className="logout-btn">
+            Sign Out
+        </button>
       </div>
     </nav>
   );

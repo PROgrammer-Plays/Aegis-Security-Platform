@@ -1,4 +1,4 @@
-// src/pages/LiveFeed.js - Fixed template string issue
+// src/pages/LiveFeed.js - Real-time Alert Monitor
 import React, { useState, useEffect, useRef } from 'react';
 import AlertDetails from '../components/AlertDetails';
 import './LiveFeed.css';
@@ -128,7 +128,7 @@ function LiveFeed({ alerts }) {
                     <span className="alert-time">
                       {new Date(alert.timestamp).toLocaleTimeString()}
                     </span>
-                    <span className={`severity-badge severity-${alert.severity?.toLowerCase()}`}>
+                    <span className="severity-badge severity-${alert.severity?.toLowerCase()}">
                       {alert.severity}
                     </span>
                   </div>

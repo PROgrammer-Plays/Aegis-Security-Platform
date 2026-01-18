@@ -4,6 +4,7 @@
   "description": "Frontend React app for AI-based security monitoring system",
   "private": true,
   "dependencies": {
+    "lucide-react": "^0.562.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^7.12.0",

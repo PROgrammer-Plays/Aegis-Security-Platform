@@ -1,5 +1,5 @@
-// src/pages/Dashboard.js - Fixed with proper error handling
-import React, { useEffect, useState, useCallback } from 'react';
+// src/pages/Dashboard.js - Enhanced SOC Dashboard
+import React, { useEffect, useState } from 'react';
 import { 
   PieChart, Pie, Cell, 
   BarChart, Bar, 
@@ -8,7 +8,8 @@ import {
   Tooltip, Legend, ResponsiveContainer 
 } from 'recharts';
 import { 
-  ShieldAlert, Activity, Server, AlertTriangle, Zap
+  ShieldAlert, Activity, Server, AlertTriangle,
+  TrendingUp, Users, Target, Zap
 } from 'lucide-react';
 import './Dashboard.css';
 
@@ -26,33 +27,25 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState(24);
   const [autoRefresh, setAutoRefresh] = useState(true);
-  const [error, setError] = useState(null);
 
   // Fetch stats from backend
-  const fetchStats = useCallback(async () => {
+  const fetchStats = async () => {
     try {
       const response = await fetch(`http://localhost:5000/api/stats?hours=${timeRange}`);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
       const data = await response.json();
-      console.log('📊 Stats received:', data);
       setStats(data);
       setLoading(false);
-      setError(null);
-    } catch (err) {
-      console.error('Failed to fetch stats:', err);
-      setError(err.message);
+      console.log('📊 Dashboard stats updated');
+    } catch (error) {
+      console.error('Failed to fetch stats:', error);
       setLoading(false);
     }
-  }, [timeRange]);
+  };
 
   // Initial load
   useEffect(() => {
     fetchStats();
-  }, [fetchStats]);
+  }, [timeRange]);
 
   // Auto-refresh every 30 seconds
   useEffect(() => {
@@ -63,7 +56,7 @@ const Dashboard = () => {
     }, 30000);
     
     return () => clearInterval(interval);
-  }, [autoRefresh, fetchStats]);
+  }, [autoRefresh, timeRange]);
 
   if (loading) {
     return (
@@ -74,47 +67,40 @@ const Dashboard = () => {
     );
   }
 
-  if (error || !stats) {
+  if (!stats) {
     return (
       <div className="dashboard-error">
         <AlertTriangle size={48} color="#ff4444" />
         <p>Failed to load dashboard statistics</p>
-        <p className="error-message">{error || 'No data available'}</p>
         <button onClick={fetchStats}>Retry</button>
       </div>
     );
   }
 
-  // Safe data extraction with defaults
-  const severityData = (stats.severity || []).map(s => ({ 
+  // Format data for charts
+  const severityData = stats.severity.map(s => ({ 
     name: s._id, 
     value: s.count,
-    color: SEVERITY_COLORS[s._id] || '#888888'
+    color: SEVERITY_COLORS[s._id] 
   }));
 
-  const engineData = (stats.engines || []).map((s, idx) => ({ 
-    name: s._id ? s._id.replace(' Engine', '') : 'Unknown', 
-    value: s.count || 0,
+  const engineData = stats.engines.map((s, idx) => ({ 
+    name: s._id.replace(' Engine', ''), 
+    value: s.count,
     color: CHART_COLORS[idx % CHART_COLORS.length]
   }));
 
-  const trendData = (stats.hourlyTrend || []).map(item => ({
+  const trendData = stats.hourlyTrend.map(item => ({
     time: new Date(item._id).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    total: item.count || 0,
+    total: item.count,
     critical: item.critical || 0,
     high: item.high || 0
   }));
 
-  // Safe overview extraction
-  const overview = stats.overview || { total: 0, recent: 0, criticalCount: 0, incidentCount: 0 };
-  const recentCritical = stats.recentCritical || [];
-  const topEntities = stats.topEntities || [];
-  const engineActivity = stats.engineActivity || [];
-
-  // Calculate system health
+  // Calculate system health (inverse of critical percentage)
   const criticalCount = severityData.find(s => s.name === 'Critical')?.value || 0;
-  const systemHealth = overview.recent > 0 
-    ? Math.round((1 - (criticalCount / overview.recent)) * 100)
+  const systemHealth = stats.overview.recent > 0 
+    ? Math.round((1 - (criticalCount / stats.overview.recent)) * 100)
     : 100;
 
   return (
@@ -157,7 +143,6 @@ const Dashboard = () => {
           <button 
             className={`refresh-btn ${autoRefresh ? 'active' : ''}`}
             onClick={() => setAutoRefresh(!autoRefresh)}
-            title={autoRefresh ? 'Auto-refresh enabled' : 'Auto-refresh disabled'}
           >
             🔄 {autoRefresh ? 'Auto' : 'Manual'}
           </button>
@@ -172,7 +157,7 @@ const Dashboard = () => {
           </div>
           <div className="kpi-content">
             <div className="kpi-label">Total Alerts</div>
-            <div className="kpi-value">{overview.recent}</div>
+            <div className="kpi-value">{stats.overview.recent}</div>
             <div className="kpi-subtext">Last {timeRange}h</div>
           </div>
         </div>
@@ -194,7 +179,7 @@ const Dashboard = () => {
           </div>
           <div className="kpi-content">
             <div className="kpi-label">Active Incidents</div>
-            <div className="kpi-value">{overview.incidentCount}</div>
+            <div className="kpi-value">{stats.overview.incidentCount}</div>
             <div className="kpi-subtext">Correlation Brain</div>
           </div>
         </div>
@@ -216,129 +201,117 @@ const Dashboard = () => {
         {/* Severity Distribution */}
         <div className="chart-card">
           <h3>🎯 Threat Severity Distribution</h3>
-          {severityData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie 
-                  data={severityData} 
-                  dataKey="value" 
-                  nameKey="name" 
-                  cx="50%" 
-                  cy="50%" 
-                  outerRadius={90}
-                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                  labelLine={true}
-                >
-                  {severityData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip 
-                  contentStyle={{ 
-                    background: '#1e2433', 
-                    border: '1px solid #2d3748',
-                    borderRadius: '8px' 
-                  }}
-                />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
-          ) : (
-            <p className="no-data">No data available for this time range</p>
-          )}
+          <ResponsiveContainer width="100%" height={300}>
+            <PieChart>
+              <Pie 
+                data={severityData} 
+                dataKey="value" 
+                nameKey="name" 
+                cx="50%" 
+                cy="50%" 
+                outerRadius={90}
+                label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                labelLine={true}
+              >
+                {severityData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.color} />
+                ))}
+              </Pie>
+              <Tooltip 
+                contentStyle={{ 
+                  background: '#1e2433', 
+                  border: '1px solid #2d3748',
+                  borderRadius: '8px' 
+                }}
+              />
+              <Legend />
+            </PieChart>
+          </ResponsiveContainer>
         </div>
 
         {/* Engine Activity */}
         <div className="chart-card">
           <h3>🔧 Detection Engine Activity</h3>
-          {engineData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={engineData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#2d3748" />
-                <XAxis 
-                  dataKey="name" 
-                  stroke="#9aa0a6"
-                  tick={{ fill: '#9aa0a6' }}
-                />
-                <YAxis 
-                  stroke="#9aa0a6"
-                  tick={{ fill: '#9aa0a6' }}
-                />
-                <Tooltip 
-                  contentStyle={{ 
-                    background: '#1e2433', 
-                    border: '1px solid #2d3748',
-                    borderRadius: '8px',
-                    color: '#e8eaed'
-                  }}
-                  cursor={{fill: '#252b3b'}}
-                />
-                <Bar dataKey="value" fill="#00bcd4" radius={[8, 8, 0, 0]}>
-                  {engineData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <p className="no-data">No data available for this time range</p>
-          )}
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={engineData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#2d3748" />
+              <XAxis 
+                dataKey="name" 
+                stroke="#9aa0a6"
+                tick={{ fill: '#9aa0a6' }}
+              />
+              <YAxis 
+                stroke="#9aa0a6"
+                tick={{ fill: '#9aa0a6' }}
+              />
+              <Tooltip 
+                contentStyle={{ 
+                  background: '#1e2433', 
+                  border: '1px solid #2d3748',
+                  borderRadius: '8px',
+                  color: '#e8eaed'
+                }}
+                cursor={{fill: '#252b3b'}}
+              />
+              <Bar dataKey="value" fill="#00bcd4" radius={[8, 8, 0, 0]}>
+                {engineData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.color} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
         </div>
 
         {/* Hourly Trend */}
         <div className="chart-card full-width">
           <h3>📈 Alert Trend Analysis (Last {timeRange}h)</h3>
-          {trendData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={250}>
-              <LineChart data={trendData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#2d3748" />
-                <XAxis 
-                  dataKey="time" 
-                  stroke="#9aa0a6"
-                  tick={{ fill: '#9aa0a6', fontSize: 12 }}
-                />
-                <YAxis 
-                  stroke="#9aa0a6"
-                  tick={{ fill: '#9aa0a6' }}
-                />
-                <Tooltip 
-                  contentStyle={{ 
-                    background: '#1e2433', 
-                    border: '1px solid #2d3748',
-                    borderRadius: '8px',
-                    color: '#e8eaed'
-                  }}
-                />
-                <Legend />
-                <Line 
-                  type="monotone" 
-                  dataKey="total" 
-                  stroke="#00bcd4" 
-                  strokeWidth={3}
-                  dot={{ r: 4 }}
-                  name="Total Alerts"
-                />
-                <Line 
-                  type="monotone" 
-                  dataKey="critical" 
-                  stroke="#ff4444" 
-                  strokeWidth={2}
-                  dot={{ r: 3 }}
-                  name="Critical"
-                />
-                <Line 
-                  type="monotone" 
-                  dataKey="high" 
-                  stroke="#ff8800" 
-                  strokeWidth={2}
-                  dot={{ r: 3 }}
-                  name="High"
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          ) : (
-            <p className="no-data">No data available for this time range</p>
-          )}
+          <ResponsiveContainer width="100%" height={250}>
+            <LineChart data={trendData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#2d3748" />
+              <XAxis 
+                dataKey="time" 
+                stroke="#9aa0a6"
+                tick={{ fill: '#9aa0a6', fontSize: 12 }}
+              />
+              <YAxis 
+                stroke="#9aa0a6"
+                tick={{ fill: '#9aa0a6' }}
+              />
+              <Tooltip 
+                contentStyle={{ 
+                  background: '#1e2433', 
+                  border: '1px solid #2d3748',
+                  borderRadius: '8px',
+                  color: '#e8eaed'
+                }}
+              />
+              <Legend />
+              <Line 
+                type="monotone" 
+                dataKey="total" 
+                stroke="#00bcd4" 
+                strokeWidth={3}
+                dot={{ r: 4 }}
+                name="Total Alerts"
+              />
+              <Line 
+                type="monotone" 
+                dataKey="critical" 
+                stroke="#ff4444" 
+                strokeWidth={2}
+                dot={{ r: 3 }}
+                name="Critical"
+              />
+              <Line 
+                type="monotone" 
+                dataKey="high" 
+                stroke="#ff8800" 
+                strokeWidth={2}
+                dot={{ r: 3 }}
+                name="High"
+              />
+            </LineChart>
+          </ResponsiveContainer>
         </div>
       </div>
 
@@ -347,21 +320,21 @@ const Dashboard = () => {
         {/* Recent Critical Incidents */}
         <div className="incidents-panel">
           <h3>🚨 Recent Critical Alerts</h3>
-          {recentCritical.length === 0 ? (
+          {stats.recentCritical.length === 0 ? (
             <p className="no-data">No critical alerts in this time period ✅</p>
           ) : (
             <div className="incidents-list">
-              {recentCritical.map((alert, idx) => (
-                <div key={alert._id || idx} className="incident-item">
+              {stats.recentCritical.map((alert, idx) => (
+                <div key={idx} className="incident-item">
                   <div className="incident-header">
                     <span className="incident-badge">CRITICAL</span>
                     <span className="incident-time">
                       {new Date(alert.timestamp).toLocaleTimeString()}
                     </span>
                   </div>
-                  <div className="incident-title">{alert.alertType || 'Unknown Alert'}</div>
+                  <div className="incident-title">{alert.alertType}</div>
                   <div className="incident-details">
-                    <span className="engine-tag">{alert.engine || 'Unknown'}</span>
+                    <span className="engine-tag">{alert.engine}</span>
                     {alert.details?.ip_address && (
                       <span className="ip-tag">📍 {alert.details.ip_address}</span>
                     )}
@@ -378,23 +351,21 @@ const Dashboard = () => {
         {/* Top Targeted Entities */}
         <div className="entities-panel">
           <h3>🎯 Most Targeted Entities</h3>
-          {topEntities.length === 0 ? (
+          {stats.topEntities.length === 0 ? (
             <p className="no-data">No entity data available</p>
           ) : (
             <div className="entities-list">
-              {topEntities.slice(0, 8).map((entity, idx) => (
-                <div key={entity._id || idx} className="entity-item">
+              {stats.topEntities.slice(0, 8).map((entity, idx) => (
+                <div key={idx} className="entity-item">
                   <div className="entity-rank">#{idx + 1}</div>
                   <div className="entity-info">
-                    <div className="entity-name">{entity._id || 'Unknown'}</div>
+                    <div className="entity-name">{entity._id}</div>
                     <div className="entity-stats">
-                      <span>{entity.count || 0} alerts</span>
-                      {entity.maxSeverity && (
-                        <span className={`severity-badge severity-${entity.maxSeverity.toLowerCase()}`}>
-                          {entity.maxSeverity}
-                        </span>
-                      )}
-                      <span>{(entity.engines || []).length} engines</span>
+                      <span>{entity.count} alerts</span>
+                      <span className={`severity-badge severity-${entity.maxSeverity?.toLowerCase()}`}>
+                        {entity.maxSeverity}
+                      </span>
+                      <span>{entity.engines.length} engines</span>
                     </div>
                   </div>
                 </div>
@@ -405,14 +376,14 @@ const Dashboard = () => {
       </div>
 
       {/* Engine Activity Summary */}
-      {engineActivity.length > 0 && (
+      {stats.engineActivity && stats.engineActivity.length > 0 && (
         <div className="engine-summary-panel">
           <h3>🔧 Engine Performance Summary</h3>
           <div className="engine-summary-grid">
-            {engineActivity.map((engine, idx) => (
-              <div key={engine._id || idx} className="engine-summary-card">
-                <div className="engine-name">{engine._id || 'Unknown'}</div>
-                <div className="engine-total">{engine.total || 0} alerts</div>
+            {stats.engineActivity.map((engine, idx) => (
+              <div key={idx} className="engine-summary-card">
+                <div className="engine-name">{engine._id}</div>
+                <div className="engine-total">{engine.total} alerts</div>
                 <div className="engine-breakdown">
                   {engine.critical > 0 && (
                     <span className="breakdown-item critical">
