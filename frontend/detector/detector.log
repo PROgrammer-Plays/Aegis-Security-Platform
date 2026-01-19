@@ -11,3 +11,5 @@
 2026-01-18 14:08:29,743 - WARNING - Compiled the loaded model, but the compiled metrics have yet to be built. `model.compile_metrics` will be empty until you train or evaluate the model.
 2026-01-18 14:08:29,836 - WARNING - Compiled the loaded model, but the compiled metrics have yet to be built. `model.compile_metrics` will be empty until you train or evaluate the model.
 2026-01-18 14:08:33,681 - ERROR - Failed to send incident: 400 Client Error: Bad Request for url: http://localhost:5000/api/alerts
+2026-01-19 20:44:11,127 - WARNING - Compiled the loaded model, but the compiled metrics have yet to be built. `model.compile_metrics` will be empty until you train or evaluate the model.
+2026-01-19 20:44:11,283 - WARNING - Compiled the loaded model, but the compiled metrics have yet to be built. `model.compile_metrics` will be empty until you train or evaluate the model.
