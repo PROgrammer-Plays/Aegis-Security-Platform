@@ -1,28 +1,29 @@
-// src/App.js - Merged Real-Time + RBAC
+// src/App.js - COMPLETE with Senior Dashboard
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import io from 'socket.io-client';
 import './App.css';
 
-// --- Import Pages (From your local files) ---
+// --- Pages ---
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import LiveFeed from './pages/LiveFeed';
 import Incidents from './pages/Incidents';
 import Forensics from './pages/Forensics';
 
-// --- Import Admin/Employee Pages (From RBAC Sprint) ---
+// --- Admin/Senior/Employee Pages ---
 import AdminDashboard from './pages/AdminDashboard';
+import SeniorDashboard from './pages/SeniorDashboard'; // NEW!
 import UserManagement from './pages/UserManagement';
 import MySecurityStatus from './pages/MySecurityStatus';
 
-// --- Import Components ---
+// --- Components ---
+import Sidebar from './components/Sidebar';
 import Toast from './components/Toast';
 
 const SOCKET_SERVER_URL = "http://localhost:5000";
 
 function App() {
-  // --- 1. Combined State (Auth + Data) ---
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [role, setRole] = useState(localStorage.getItem('role'));
   const [loading, setLoading] = useState(true);
@@ -32,7 +33,7 @@ function App() {
   const [isConnected, setIsConnected] = useState(false);
   const [toast, setToast] = useState(null);
 
-  // --- 2. Auth Check on Mount ---
+  // Auth check on mount
   useEffect(() => {
     const storedToken = localStorage.getItem('token');
     const storedRole = localStorage.getItem('role');
@@ -43,7 +44,7 @@ function App() {
     setLoading(false);
   }, []);
 
-  // --- 3. Socket.IO Connection (Only runs if authenticated) ---
+  // Socket.IO Connection (Only if authenticated)
   useEffect(() => {
     if (!token) return;
 
@@ -64,7 +65,7 @@ function App() {
       
       setAlerts(prevAlerts => [newAlert, ...prevAlerts]);
       
-      // Toast Logic from Old Code
+      // Toast notifications
       if (newAlert.engine === "CORRELATION BRAIN") {
         setToast({
           type: 'critical',
@@ -87,14 +88,14 @@ function App() {
     };
   }, [token]);
 
-  // --- 4. Data Fetching (Only runs if authenticated) ---
+  // Data Fetching (Only if authenticated)
   useEffect(() => {
     if (!token) return;
 
     const fetchInitialAlerts = async () => {
       try {
         const response = await fetch('http://localhost:5000/api/alerts?limit=100', {
-            headers: { 'Authorization': token }
+          headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
         setAlerts(Array.isArray(data) ? data : data.alerts || []);
@@ -106,7 +107,7 @@ function App() {
     const fetchStats = async () => {
       try {
         const response = await fetch('http://localhost:5000/api/stats', {
-            headers: { 'Authorization': token }
+          headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
         setStats(data);
@@ -122,32 +123,29 @@ function App() {
     return () => clearInterval(interval);
   }, [token]);
 
-  // --- 5. Render Logic ---
-
   if (loading) return <div className="app-loading">Loading...</div>;
 
   // If not logged in, show Login
   if (!token) {
     return <Login setToken={(t, r) => {
-        localStorage.setItem('token', t);
-        localStorage.setItem('role', r); // Ensure Login page passes role back
-        setToken(t);
-        setRole(r);
+      localStorage.setItem('token', t);
+      localStorage.setItem('role', r);
+      setToken(t);
+      setRole(r);
     }} />;
   }
 
   return (
     <Router>
       <div className="app-container">
-        {/* Pass role to Navigation to hide/show links */}
-        <Navigation isConnected={isConnected} role={role} />
+        <Sidebar isConnected={isConnected} />
         
         <main className="main-content">
           <Routes>
             {/* --- ADMIN ROUTES --- */}
             {role === 'admin' && (
               <>
-                <Route path="/" element={<AdminDashboard />} />
+                <Route path="/" element={<Navigate to="/admin-dashboard" />} />
                 <Route path="/admin-dashboard" element={<AdminDashboard />} />
                 <Route path="/users" element={<UserManagement />} />
                 {/* Admin can also view operational pages */}
@@ -161,7 +159,8 @@ function App() {
             {/* --- SENIOR ROUTES --- */}
             {role === 'senior' && (
               <>
-                <Route path="/" element={<Dashboard stats={stats} />} />
+                <Route path="/" element={<Navigate to="/senior-dashboard" />} />
+                <Route path="/senior-dashboard" element={<SeniorDashboard />} />
                 <Route path="/dashboard" element={<Dashboard stats={stats} />} />
                 <Route path="/feed" element={<LiveFeed alerts={alerts} />} />
                 <Route path="/incidents" element={<Incidents alerts={alerts} />} />
@@ -172,7 +171,7 @@ function App() {
             {/* --- EMPLOYEE ROUTES --- */}
             {role === 'employee' && (
               <>
-                <Route path="/" element={<MySecurityStatus alerts={alerts} />} />
+                <Route path="/" element={<Navigate to="/my-status" />} />
                 <Route path="/my-status" element={<MySecurityStatus alerts={alerts} />} />
               </>
             )}
@@ -190,69 +189,6 @@ function App() {
         )}
       </div>
     </Router>
-  );
-}
-
-// --- Combined Navigation Component ---
-function Navigation({ isConnected, role }) {
-  const location = useLocation();
-  
-  // Define menu items per role
-  let navItems = [];
-
-  if (role === 'admin') {
-    navItems = [
-        { path: '/', label: 'Admin Overview', icon: '👑' },
-        { path: '/users', label: 'User Mgmt', icon: '👥' },
-        { path: '/dashboard', label: 'Ops Dashboard', icon: '📊' },
-        { path: '/feed', label: 'Live Feed', icon: '📡' },
-        { path: '/incidents', label: 'War Room', icon: '🚨' },
-        { path: '/forensics', label: 'Forensics', icon: '🔍' }
-    ];
-  } else if (role === 'senior') {
-    navItems = [
-        { path: '/', label: 'Dashboard', icon: '📊' },
-        { path: '/feed', label: 'Live Feed', icon: '📡' },
-        { path: '/incidents', label: 'War Room', icon: '🚨' },
-        { path: '/forensics', label: 'Forensics', icon: '🔍' }
-    ];
-  } else if (role === 'employee') {
-    navItems = [
-        { path: '/', label: 'My Status', icon: '🛡️' }
-    ];
-  }
-  
-  return (
-    <nav className="sidebar">
-      <div className="sidebar-header">
-        <h1 className="logo">🛡️ AEGIS</h1>
-        <div className={`status-indicator ${isConnected ? 'connected' : 'disconnected'}`}>
-          <span className="status-dot"></span>
-          {isConnected ? 'Connected' : 'Disconnected'}
-        </div>
-        <div className="user-role-badge">{role ? role.toUpperCase() : ''}</div>
-      </div>
-      
-      <ul className="nav-menu">
-        {navItems.map(item => (
-          <li key={item.path} className={location.pathname === item.path ? 'active' : ''}>
-            <Link to={item.path}>
-              <span className="nav-icon">{item.icon}</span>
-              <span className="nav-label">{item.label}</span>
-            </Link>
-          </li>
-        ))}
-      </ul>
-      
-      <div className="sidebar-footer">
-        <button onClick={() => {
-            localStorage.clear();
-            window.location.reload();
-        }} className="logout-btn">
-            Sign Out
-        </button>
-      </div>
-    </nav>
   );
 }
 

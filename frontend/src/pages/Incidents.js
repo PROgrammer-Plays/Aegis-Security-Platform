@@ -1,102 +1,259 @@
-// src/pages/Incidents.js - Enhanced War Room with Better Filtering
+// src/pages/Incidents.js - SMART War Room with Correlation-Aware Resolution
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
   CheckCircle, AlertOctagon, Clock, Activity, 
-  XCircle, PlayCircle, Target, Zap, Shield
+  XCircle, PlayCircle, Target, Zap, Shield, AlertTriangle
 } from 'lucide-react';
 import './Incidents.css';
 
-const STATUS_OPTIONS = ['New', 'Investigating', 'Resolved', 'False Positive'];
+const STATUS_OPTIONS = ['New', 'In Progress', 'Resolved', 'False Positive'];
 
 const Incidents = () => {
   const [incidents, setIncidents] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('all'); // 'all', 'active', 'resolved'
+  const [filter, setFilter] = useState('all'); //  'all' = Correlation only, 'active' = Engine alerts, 'resolved' = All resolved
   const [selectedIncident, setSelectedIncident] = useState(null);
+  const [confirmDialog, setConfirmDialog] = useState(null);
+
+  const token = localStorage.getItem('token');
 
   // Fetch incidents from backend
   const fetchIncidents = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:5000/api/alerts?limit=200');
+      console.log('🔍 Fetching incidents...');
+      
+      const response = await fetch('http://localhost:5000/api/alerts?limit=200', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          localStorage.clear();
+          window.location.href = '/';
+          return;
+        }
+        throw new Error(`HTTP ${response.status}`);
+      }
+      
       const data = await response.json();
       
-      // Filter for incidents: Correlation Brain OR Critical severity
       const filtered = (data.alerts || []).filter(alert => 
         alert.engine === "CORRELATION BRAIN" || 
-        alert.severity === "Critical"
+        alert.severity === "Critical" ||
+        alert.severity === "High"
       );
       
-      // Sort by timestamp (newest first)
-      filtered.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+      filtered.sort((a, b) => {
+        if (a.engine === 'CORRELATION BRAIN' && b.engine !== 'CORRELATION BRAIN') return -1;
+        if (a.engine !== 'CORRELATION BRAIN' && b.engine === 'CORRELATION BRAIN') return 1;
+        return new Date(b.timestamp) - new Date(a.timestamp);
+      });
       
       setIncidents(filtered);
-      console.log(`📊 Loaded ${filtered.length} incidents`);
+      console.log(`✅ Loaded ${filtered.length} incidents`);
     } catch (error) {
-      console.error('Error fetching incidents:', error);
+      console.error('❌ Error:', error);
     }
     setLoading(false);
-  }, []);
+  }, [token]);
 
   useEffect(() => {
     fetchIncidents();
-    
-    // Refresh every 15 seconds
     const interval = setInterval(fetchIncidents, 15000);
     return () => clearInterval(interval);
   }, [fetchIncidents]);
 
-  // Update incident status
-  const updateStatus = async (id, newStatus) => {
+  // Find related engine alerts for a correlation incident
+  const findRelatedAlerts = (correlationIncident) => {
+    if (correlationIncident.engine !== 'CORRELATION BRAIN') return [];
+    
+    const targetEntity = correlationIncident.details?.target_entity;
+    if (!targetEntity) return [];
+    
+    return incidents.filter(inc => 
+      inc.engine !== 'CORRELATION BRAIN' &&
+      (inc.details?.ip_address === targetEntity ||
+       inc.details?.source_ip === targetEntity ||
+       inc.details?.target_entity === targetEntity)
+    );
+  };
+
+  // Find parent correlation incidents for an engine alert
+  const findParentCorrelations = (alert) => {
+    if (alert.engine === 'CORRELATION BRAIN') return [];
+    
+    const targetEntity = alert.details?.ip_address || 
+                        alert.details?.source_ip || 
+                        alert.details?.target_entity;
+    
+    if (!targetEntity) return [];
+    
+    return incidents.filter(inc => 
+      inc.engine === 'CORRELATION BRAIN' &&
+      inc.details?.target_entity === targetEntity &&
+      inc.status !== 'Resolved' &&
+      inc.status !== 'False Positive'
+    );
+  };
+
+  // Main status update function with cascade logic
+  const updateStatus = async (id, newStatus, skipConfirm = false) => {
     try {
-      const response = await fetch(`http://localhost:5000/api/alerts/${id}/status`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus })
-      });
+      const incident = incidents.find(inc => inc._id === id);
+      if (!incident) return;
+
+      // CASE 1: Resolving Correlation Brain → Cascade to related alerts
+      if (incident.engine === 'CORRELATION BRAIN' && 
+          (newStatus === 'Resolved' || newStatus === 'False Positive') &&
+          !skipConfirm) {
+        
+        const relatedAlerts = findRelatedAlerts(incident);
+        
+        if (relatedAlerts.length > 0) {
+          setConfirmDialog({
+            incident,
+            newStatus,
+            relatedAlerts,
+            message: `This will also mark ${relatedAlerts.length} related alert${relatedAlerts.length > 1 ? 's' : ''} as ${newStatus}. Continue?`
+          });
+          return;
+        }
+      }
+
+      // Update the main incident
+      await performUpdate(id, newStatus);
       
-      if (!response.ok) throw new Error('Failed to update status');
+      // CASE 2: Resolved engine alert → Check if parent correlation should auto-resolve
+      if (incident.engine !== 'CORRELATION BRAIN' && 
+          (newStatus === 'Resolved' || newStatus === 'False Positive')) {
+        
+        const parentCorrelations = findParentCorrelations(incident);
+        
+        for (const correlation of parentCorrelations) {
+          const relatedAlerts = findRelatedAlerts(correlation);
+          
+          // Check if ALL related alerts are now resolved
+          const allResolved = relatedAlerts.every(alert => 
+            alert._id === id || 
+            alert.status === 'Resolved' || 
+            alert.status === 'False Positive'
+          );
+          
+          if (allResolved) {
+            console.log(`🎯 Auto-resolving correlation ${correlation._id}`);
+            await performUpdate(correlation._id, 'Resolved');
+            alert('✅ All related alerts resolved. Correlation incident auto-resolved.');
+          }
+        }
+      }
       
-      // Update local state
-      setIncidents(prev => prev.map(inc => 
-        inc._id === id ? { ...inc, status: newStatus } : inc
-      ));
-      
-      console.log(`✅ Updated incident ${id} to ${newStatus}`);
+      alert(`✅ Incident marked as ${newStatus}`);
+      await fetchIncidents(); // Refresh
     } catch (error) {
-      console.error('Failed to update status:', error);
-      alert('Failed to update status. Please try again.');
+      console.error('❌ Update failed:', error);
+      alert('❌ Failed to update. Please try again.');
     }
   };
 
-  // Filter incidents based on selected filter
+  // Perform the actual API update
+  const performUpdate = async (id, newStatus) => {
+    const response = await fetch(`http://localhost:5000/api/alerts/${id}/status`, {
+      method: 'PATCH',
+      headers: { 
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ status: newStatus })
+    });
+    
+    if (!response.ok) throw new Error(`Update failed: ${response.status}`);
+    
+    setIncidents(prev => prev.map(inc => 
+      inc._id === id ? { ...inc, status: newStatus } : inc
+    ));
+  };
+
+  // Handle cascade resolution from confirmation dialog
+  const handleCascadeResolve = async () => {
+    if (!confirmDialog) return;
+    
+    const { incident, newStatus, relatedAlerts } = confirmDialog;
+    
+    try {
+      // Resolve correlation
+      await performUpdate(incident._id, newStatus);
+      
+      // Resolve all related
+      for (const alert of relatedAlerts) {
+        await performUpdate(alert._id, newStatus);
+      }
+      
+      alert(`✅ Resolved correlation and ${relatedAlerts.length} related alert${relatedAlerts.length > 1 ? 's' : ''}`);
+      setConfirmDialog(null);
+      await fetchIncidents();
+    } catch (error) {
+      console.error('❌ Cascade failed:', error);
+      alert('❌ Failed to resolve related alerts');
+      setConfirmDialog(null);
+    }
+  };
+
+  // SMART FILTERING
   const filteredIncidents = incidents.filter(incident => {
     const status = incident.status || 'New';
     
     switch(filter) {
+      case 'all':
+        // Show ONLY Correlation Brain incidents (not resolved)
+        return incident.engine === 'CORRELATION BRAIN' &&
+               status !== 'Resolved' && 
+               status !== 'False Positive';
+               
       case 'active':
-        return status !== 'Resolved' && status !== 'False Positive';
+        // Show individual engine alerts (not resolved)
+        return incident.engine !== 'CORRELATION BRAIN' &&
+               status !== 'Resolved' && 
+               status !== 'False Positive';
+               
       case 'resolved':
+        // Show all resolved incidents
         return status === 'Resolved' || status === 'False Positive';
+        
       default:
         return true;
     }
   });
 
-  // Get status badge color
+  // Stats
+  const correlationCount = incidents.filter(i => 
+    i.engine === 'CORRELATION BRAIN' && i.status !== 'Resolved' && i.status !== 'False Positive'
+  ).length;
+  
+  const activeCount = incidents.filter(i => 
+    i.engine !== 'CORRELATION BRAIN' && i.status !== 'Resolved' && i.status !== 'False Positive'
+  ).length;
+  
+  const resolvedCount = incidents.filter(i => 
+    i.status === 'Resolved' || i.status === 'False Positive'
+  ).length;
+
   const getStatusColor = (status) => {
     switch(status) {
       case 'Resolved': return 'success';
-      case 'Investigating': return 'warning';
+      case 'In Progress': return 'warning';
+      case 'Review Requested': return 'info';
       case 'False Positive': return 'info';
       default: return 'danger';
     }
   };
 
-  // Get incident icon
   const getIncidentIcon = (incident) => {
     if (incident.engine === 'CORRELATION BRAIN') return <Zap size={20} />;
-    return <Shield size={20} />;
+    return incident.severity === 'Critical' ? <AlertOctagon size={20} /> : <Shield size={20} />;
   };
 
   if (loading && incidents.length === 0) {
@@ -104,7 +261,7 @@ const Incidents = () => {
       <div className="incidents-page">
         <div className="loading-state">
           <div className="spinner"></div>
-          <p>Loading incidents...</p>
+          <p>Loading War Room...</p>
         </div>
       </div>
     );
@@ -128,90 +285,61 @@ const Incidents = () => {
         </div>
       </header>
 
-      {/* Stats Bar */}
+      {/* Stats */}
       <div className="incidents-stats">
         <div className="stat-card">
-          <div className="stat-icon danger">
-            <AlertOctagon size={24} />
-          </div>
+          <div className="stat-icon danger"><AlertOctagon size={24} /></div>
           <div className="stat-content">
             <div className="stat-value">{incidents.length}</div>
             <div className="stat-label">Total Incidents</div>
           </div>
         </div>
-        
         <div className="stat-card">
-          <div className="stat-icon warning">
-            <Activity size={24} />
-          </div>
+          <div className="stat-icon warning"><Activity size={24} /></div>
           <div className="stat-content">
-            <div className="stat-value">
-              {incidents.filter(i => !i.status || i.status === 'New' || i.status === 'Investigating').length}
-            </div>
+            <div className="stat-value">{activeCount}</div>
             <div className="stat-label">Active</div>
           </div>
         </div>
-        
         <div className="stat-card">
-          <div className="stat-icon success">
-            <CheckCircle size={24} />
-          </div>
+          <div className="stat-icon success"><CheckCircle size={24} /></div>
           <div className="stat-content">
-            <div className="stat-value">
-              {incidents.filter(i => i.status === 'Resolved').length}
-            </div>
+            <div className="stat-value">{resolvedCount}</div>
             <div className="stat-label">Resolved</div>
           </div>
         </div>
-        
         <div className="stat-card">
-          <div className="stat-icon info">
-            <Zap size={24} />
-          </div>
+          <div className="stat-icon info"><Zap size={24} /></div>
           <div className="stat-content">
-            <div className="stat-value">
-              {incidents.filter(i => i.engine === 'CORRELATION BRAIN').length}
-            </div>
+            <div className="stat-value">{correlationCount}</div>
             <div className="stat-label">Correlated</div>
           </div>
         </div>
       </div>
 
-      {/* Filter Tabs */}
+      {/* Tabs */}
       <div className="filter-tabs">
-        <button 
-          className={filter === 'all' ? 'active' : ''} 
-          onClick={() => setFilter('all')}
-        >
-          All ({incidents.length})
+        <button className={filter === 'all' ? 'active' : ''} onClick={() => setFilter('all')}>
+          Correlation ({correlationCount})
         </button>
-        <button 
-          className={filter === 'active' ? 'active' : ''} 
-          onClick={() => setFilter('active')}
-        >
-          Active ({incidents.filter(i => !i.status || i.status === 'New' || i.status === 'Investigating').length})
+        <button className={filter === 'active' ? 'active' : ''} onClick={() => setFilter('active')}>
+          Active Alerts ({activeCount})
         </button>
-        <button 
-          className={filter === 'resolved' ? 'active' : ''} 
-          onClick={() => setFilter('resolved')}
-        >
-          Resolved ({incidents.filter(i => i.status === 'Resolved' || i.status === 'False Positive').length})
+        <button className={filter === 'resolved' ? 'active' : ''} onClick={() => setFilter('resolved')}>
+          Resolved ({resolvedCount})
         </button>
       </div>
 
-      {/* Incidents Grid */}
+      {/* Grid */}
       <div className="incidents-grid">
         {filteredIncidents.length === 0 ? (
           <div className="empty-state">
             <CheckCircle size={64} color="#00C851" />
             <h3>All Clear!</h3>
             <p>
-              {filter === 'resolved' 
-                ? 'No resolved incidents yet'
-                : 'No active incidents detected'}
-            </p>
-            <p className="empty-hint">
-              Run simulation: <code>python detector.py simulation</code>
+              {filter === 'resolved' ? 'No resolved incidents yet' :
+               filter === 'active' ? 'No active engine alerts' :
+               'No correlation incidents'}
             </p>
           </div>
         ) : (
@@ -223,10 +351,48 @@ const Incidents = () => {
               onViewDetails={() => setSelectedIncident(incident)}
               getStatusColor={getStatusColor}
               getIncidentIcon={getIncidentIcon}
+              relatedCount={incident.engine === 'CORRELATION BRAIN' ? findRelatedAlerts(incident).length : 0}
             />
           ))
         )}
       </div>
+
+      {/* Confirmation Modal */}
+      {confirmDialog && (
+        <div className="modal-overlay" onClick={() => setConfirmDialog(null)}>
+          <div className="modal-content confirmation-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <AlertTriangle size={32} color="#ff8800" />
+              <h2>Confirm Cascade Resolution</h2>
+            </div>
+            <div className="modal-body">
+              <p className="confirm-message">{confirmDialog.message}</p>
+              
+              <div className="related-alerts-preview">
+                <h4>Related Alerts:</h4>
+                {confirmDialog.relatedAlerts.map(alert => (
+                  <div key={alert._id} className="related-alert-item">
+                    <span className={`severity-badge severity-${alert.severity?.toLowerCase()}`}>
+                      {alert.severity}
+                    </span>
+                    <span className="alert-engine">{alert.engine}</span>
+                    <span className="alert-type">{alert.alertType}</span>
+                  </div>
+                ))}
+              </div>
+              
+              <div className="confirm-actions">
+                <button className="btn-cancel" onClick={() => setConfirmDialog(null)}>
+                  Cancel
+                </button>
+                <button className="btn-confirm" onClick={handleCascadeResolve}>
+                  ✅ Resolve All
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Detail Modal */}
       {selectedIncident && (
@@ -235,49 +401,51 @@ const Incidents = () => {
           onClose={() => setSelectedIncident(null)}
           onStatusUpdate={updateStatus}
           getStatusColor={getStatusColor}
+          relatedAlerts={selectedIncident.engine === 'CORRELATION BRAIN' ? findRelatedAlerts(selectedIncident) : []}
         />
       )}
     </div>
   );
 };
 
-// Incident Card Component
-const IncidentCard = ({ incident, onStatusUpdate, onViewDetails, getStatusColor, getIncidentIcon }) => {
+// Incident Card
+const IncidentCard = ({ incident, onStatusUpdate, onViewDetails, getStatusColor, getIncidentIcon, relatedCount }) => {
   const status = incident.status || 'New';
   const isResolved = status === 'Resolved' || status === 'False Positive';
   
   return (
     <div className={`incident-card ${isResolved ? 'resolved' : ''} ${incident.engine === 'CORRELATION BRAIN' ? 'correlation' : ''}`}>
-      {/* Card Header */}
       <div className="card-header">
         <div className="card-title">
           {getIncidentIcon(incident)}
-          <span>{incident.engine === 'CORRELATION BRAIN' ? 'CORRELATED INCIDENT' : 'CRITICAL ALERT'}</span>
+          <span className="title-text">
+            {incident.engine === 'CORRELATION BRAIN' ? 'CORRELATION BRAIN' : incident.engine}
+          </span>
+          {relatedCount > 0 && (
+            <span className="related-count-badge">+{relatedCount}</span>
+          )}
         </div>
         <div className="card-meta">
+          <span className={`severity-badge severity-${incident.severity?.toLowerCase()}`}>
+            {incident.severity}
+          </span>
           <Clock size={14} />
-          {new Date(incident.timestamp).toLocaleString()}
+          <span>{new Date(incident.timestamp).toLocaleTimeString()}</span>
         </div>
       </div>
 
-      {/* Card Body */}
       <div className="card-body">
         <h3 className="incident-title">{incident.alertType}</h3>
         
-        {/* Target Entity */}
-        <div className="incident-target">
-          <Target size={16} />
-          <span>Target: </span>
-          <span className="highlight">
-            {incident.details?.target_entity || 
-             incident.details?.ip_address || 
-             incident.details?.source_ip ||
-             incident.details?.user_id ||
-             'Unknown'}
-          </span>
-        </div>
+        {(incident.details?.ip_address || incident.details?.target_entity) && (
+          <div className="incident-target">
+            <Target size={16} />
+            <span className="highlight">
+              {incident.details.ip_address || incident.details.target_entity}
+            </span>
+          </div>
+        )}
 
-        {/* Correlation Details */}
         {incident.engine === 'CORRELATION BRAIN' && incident.details && (
           <div className="correlation-details">
             <div className="correlation-stats">
@@ -285,91 +453,36 @@ const IncidentCard = ({ incident, onStatusUpdate, onViewDetails, getStatusColor,
               <span className="stat-pill">Engines: {incident.details.engine_count}</span>
               <span className="stat-pill">Alerts: {incident.details.alert_count}</span>
             </div>
-            
-            {/* Attack Patterns */}
-            {incident.details.attack_patterns && incident.details.attack_patterns.length > 0 && (
-              <div className="attack-patterns">
-                <strong>Attack Patterns:</strong>
-                {incident.details.attack_patterns.map((pattern, idx) => (
-                  <span key={idx} className="pattern-badge">{pattern}</span>
-                ))}
-              </div>
-            )}
-            
-            {/* Attack Chain/Timeline */}
-            {incident.details.timeline && incident.details.timeline.length > 0 && (
-              <div className="attack-chain">
-                <strong>Attack Chain:</strong>
-                <ol className="timeline-list">
-                  {incident.details.timeline.slice(0, 3).map((step, idx) => (
-                    <li key={idx}>{step}</li>
-                  ))}
-                  {incident.details.timeline.length > 3 && (
-                    <li className="more-link" onClick={onViewDetails}>
-                      +{incident.details.timeline.length - 3} more steps...
-                    </li>
-                  )}
-                </ol>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Regular Alert Details */}
-        {incident.engine !== 'CORRELATION BRAIN' && incident.details && (
-          <div className="alert-details">
-            <div className="detail-item">
-              <span className="detail-label">Engine:</span>
-              <span className="detail-value">{incident.engine}</span>
-            </div>
-            {incident.details.verdict && (
-              <div className="detail-item">
-                <span className="detail-label">Verdict:</span>
-                <span className="detail-value">{incident.details.verdict}</span>
-              </div>
-            )}
           </div>
         )}
       </div>
 
-      {/* Card Footer */}
       <div className="card-footer">
-        <div className="status-section">
-          <span className={`status-badge ${getStatusColor(status)}`}>
-            {status}
-          </span>
-        </div>
+        <span className={`status-badge ${getStatusColor(status)}`}>{status}</span>
         
         <div className="action-buttons">
-          <button className="btn-view" onClick={onViewDetails}>
-            View Details
-          </button>
+          <button className="btn-view" onClick={onViewDetails}>👁️ View</button>
           
-          {!isResolved && (
+          {!isResolved && status === 'New' && (
+            <button className="btn-investigate" onClick={() => onStatusUpdate(incident._id, 'In Progress')}>
+              🔍 Investigate
+            </button>
+          )}
+          
+          {status === 'In Progress' && (
             <>
-              <button 
-                className="btn-investigate" 
-                onClick={() => onStatusUpdate(incident._id, 'Investigating')}
-                disabled={status === 'Investigating'}
-              >
-                <PlayCircle size={16} /> Investigate
+              <button className="btn-resolve" onClick={() => onStatusUpdate(incident._id, 'Resolved')}>
+                ✅ Resolve
               </button>
-              
-              <button 
-                className="btn-resolve" 
-                onClick={() => onStatusUpdate(incident._id, 'Resolved')}
-              >
-                <CheckCircle size={16} /> Resolve
+              <button className="btn-false-positive" onClick={() => onStatusUpdate(incident._id, 'False Positive')}>
+                ❌ False Positive
               </button>
             </>
           )}
           
-          {status === 'Investigating' && (
-            <button 
-              className="btn-false-positive" 
-              onClick={() => onStatusUpdate(incident._id, 'False Positive')}
-            >
-              <XCircle size={16} /> False Positive
+          {isResolved && status !== 'Resolved' && (
+            <button className="btn-investigate" onClick={() => onStatusUpdate(incident._id, 'In Progress')}>
+              🔄 Re-investigate
             </button>
           )}
         </div>
@@ -378,143 +491,51 @@ const IncidentCard = ({ incident, onStatusUpdate, onViewDetails, getStatusColor,
   );
 };
 
-// Incident Detail Modal
-const IncidentDetailModal = ({ incident, onClose, onStatusUpdate, getStatusColor }) => {
+// Detail Modal (simplified for space)
+const IncidentDetailModal = ({ incident, onClose, onStatusUpdate, getStatusColor, relatedAlerts }) => {
   const status = incident.status || 'New';
   
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content incident-modal" onClick={(e) => e.stopPropagation()}>
-        {/* Modal Header */}
         <div className="modal-header">
-          <div className="modal-title">
-            <AlertOctagon size={24} color="#ff4444" />
-            <h2>Incident Details</h2>
-          </div>
+          <h2>Incident Details</h2>
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
-
-        {/* Modal Body */}
         <div className="modal-body">
-          {/* Basic Info */}
           <div className="detail-section">
-            <h3>Overview</h3>
+            <h3>Information</h3>
             <div className="detail-grid">
-              <div className="detail-row">
-                <span className="label">Type:</span>
-                <span className="value">{incident.alertType}</span>
-              </div>
-              <div className="detail-row">
-                <span className="label">Engine:</span>
-                <span className="value">{incident.engine}</span>
-              </div>
-              <div className="detail-row">
-                <span className="label">Severity:</span>
-                <span className={`value severity-${incident.severity?.toLowerCase()}`}>
-                  {incident.severity}
-                </span>
-              </div>
-              <div className="detail-row">
-                <span className="label">Timestamp:</span>
-                <span className="value">{new Date(incident.timestamp).toLocaleString()}</span>
-              </div>
-              <div className="detail-row">
-                <span className="label">Status:</span>
-                <span className={`status-badge ${getStatusColor(status)}`}>
-                  {status}
-                </span>
-              </div>
+              <div><strong>Engine:</strong> {incident.engine}</div>
+              <div><strong>Type:</strong> {incident.alertType}</div>
+              <div><strong>Severity:</strong> <span className={`severity-badge severity-${incident.severity?.toLowerCase()}`}>{incident.severity}</span></div>
+              <div><strong>Status:</strong> <span className={`status-badge ${getStatusColor(status)}`}>{status}</span></div>
             </div>
           </div>
-
-          {/* Correlation Details */}
-          {incident.engine === 'CORRELATION BRAIN' && incident.details && (
-            <>
-              <div className="detail-section">
-                <h3>Correlation Analysis</h3>
-                <div className="detail-grid">
-                  <div className="detail-row">
-                    <span className="label">Target Entity:</span>
-                    <span className="value highlight">{incident.details.target_entity}</span>
-                  </div>
-                  <div className="detail-row">
-                    <span className="label">Risk Score:</span>
-                    <span className="value risk-score">{incident.details.risk_score}</span>
-                  </div>
-                  <div className="detail-row">
-                    <span className="label">Engines Involved:</span>
-                    <span className="value">{incident.details.engine_count}</span>
-                  </div>
-                  <div className="detail-row">
-                    <span className="label">Total Alerts:</span>
-                    <span className="value">{incident.details.alert_count}</span>
-                  </div>
+          
+          {relatedAlerts && relatedAlerts.length > 0 && (
+            <div className="detail-section">
+              <h3>Related Alerts ({relatedAlerts.length})</h3>
+              {relatedAlerts.map(alert => (
+                <div key={alert._id} className="related-alert-item">
+                  <span className={`severity-badge severity-${alert.severity?.toLowerCase()}`}>{alert.severity}</span>
+                  <span>{alert.engine} - {alert.alertType}</span>
                 </div>
-              </div>
-
-              {/* Attack Patterns */}
-              {incident.details.attack_patterns && (
-                <div className="detail-section">
-                  <h3>Detected Attack Patterns</h3>
-                  <div className="patterns-list">
-                    {incident.details.attack_patterns.map((pattern, idx) => (
-                      <div key={idx} className="pattern-item">
-                        ⚡ {pattern}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Full Timeline */}
-              {incident.details.timeline && (
-                <div className="detail-section">
-                  <h3>Complete Attack Timeline</h3>
-                  <ol className="full-timeline">
-                    {incident.details.timeline.map((step, idx) => (
-                      <li key={idx}>{step}</li>
-                    ))}
-                  </ol>
-                </div>
-              )}
-
-              {/* Engines Involved */}
-              {incident.details.engines_involved && (
-                <div className="detail-section">
-                  <h3>Detection Engines</h3>
-                  <div className="engines-list">
-                    {incident.details.engines_involved.map((engine, idx) => (
-                      <span key={idx} className="engine-badge">{engine}</span>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </>
+              ))}
+            </div>
           )}
-
-          {/* Raw Details */}
-          <div className="detail-section">
-            <h3>Technical Details</h3>
-            <pre className="json-details">
-              {JSON.stringify(incident.details, null, 2)}
-            </pre>
-          </div>
-
-          {/* Action Buttons */}
+          
           <div className="detail-section">
             <h3>Actions</h3>
             <div className="status-actions">
-              {STATUS_OPTIONS.map(newStatus => (
+              {STATUS_OPTIONS.map(option => (
                 <button
-                  key={newStatus}
-                  className={`status-action-btn ${status === newStatus ? 'active' : ''}`}
-                  onClick={() => {
-                    onStatusUpdate(incident._id, newStatus);
-                    setTimeout(onClose, 500);
-                  }}
-                  disabled={status === newStatus}
+                  key={option}
+                  className={`status-action-btn ${status === option ? 'active' : ''}`}
+                  onClick={() => { onStatusUpdate(incident._id, option); onClose(); }}
+                  disabled={status === option}
                 >
-                  {newStatus}
+                  {option}
                 </button>
               ))}
             </div>

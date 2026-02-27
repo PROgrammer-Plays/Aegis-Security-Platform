@@ -1,20 +1,23 @@
-// src/components/Sidebar.js - Complete RBAC Sidebar
-import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
+// src/components/Sidebar.js - COMPLETE with Senior Dashboard
+import React, { useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   Shield, LayoutDashboard, Activity, AlertOctagon, 
-  Search, Users, LogOut, User
+  Search, Users, User, Power, Target
 } from 'lucide-react';
 import './Sidebar.css';
 
-const Sidebar = () => {
+const Sidebar = ({ isConnected }) => {
   const location = useLocation();
+  const navigate = useNavigate();
   const role = localStorage.getItem('role');
   const username = localStorage.getItem('username');
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   const handleLogout = () => {
     localStorage.clear();
-    window.location.href = '/login';
+    navigate('/login');
+    window.location.reload();
   };
 
   const isActive = (path) => {
@@ -28,7 +31,10 @@ const Sidebar = () => {
         <Shield size={32} color="#00bcd4" />
         <div className="logo-text">
           <h2>AEGIS</h2>
-          <span className={`role-badge ${role}`}>{role?.toUpperCase()}</span>
+          <div className="status-indicator">
+            <span className={`status-dot ${isConnected ? 'connected' : 'disconnected'}`}></span>
+            <span className="status-text">{isConnected ? 'Connected' : 'Disconnected'}</span>
+          </div>
         </div>
       </div>
 
@@ -38,23 +44,42 @@ const Sidebar = () => {
           <User size={24} />
         </div>
         <div className="user-info">
-          <div className="user-name">{username}</div>
-          <div className="user-role">{role}</div>
+          <div className="user-name">{username || 'User'}</div>
+          <span className={`role-badge role-${role}`}>{role?.toUpperCase()}</span>
         </div>
       </div>
 
       {/* Navigation */}
       <nav className="sidebar-nav">
-        {/* Admin Navigation */}
+        {/* Admin Navigation - FULL ACCESS */}
         {role === 'admin' && (
           <>
-            <Link to="/admin-dashboard" className={`nav-item ${isActive('/admin-dashboard') || isActive('/')}`}>
+            <div className="nav-section-title">ADMINISTRATION</div>
+            <Link to="/admin-dashboard" className={`nav-item ${isActive('/admin-dashboard')}`}>
               <LayoutDashboard size={20} />
-              <span>Executive Dashboard</span>
+              <span>Admin Overview</span>
             </Link>
             <Link to="/users" className={`nav-item ${isActive('/users')}`}>
               <Users size={20} />
-              <span>Manage Users</span>
+              <span>User Management</span>
+            </Link>
+            
+            <div className="nav-section-title">OPERATIONS</div>
+            <Link to="/dashboard" className={`nav-item ${isActive('/dashboard')}`}>
+              <LayoutDashboard size={20} />
+              <span>Ops Dashboard</span>
+            </Link>
+            <Link to="/feed" className={`nav-item ${isActive('/feed')}`}>
+              <Activity size={20} />
+              <span>Live Feed</span>
+            </Link>
+            <Link to="/incidents" className={`nav-item ${isActive('/incidents')}`}>
+              <AlertOctagon size={20} />
+              <span>War Room</span>
+            </Link>
+            <Link to="/forensics" className={`nav-item ${isActive('/forensics')}`}>
+              <Search size={20} />
+              <span>Forensics</span>
             </Link>
           </>
         )}
@@ -62,9 +87,14 @@ const Sidebar = () => {
         {/* Senior Analyst Navigation */}
         {role === 'senior' && (
           <>
-            <Link to="/dashboard" className={`nav-item ${isActive('/dashboard') || isActive('/')}`}>
+            <div className="nav-section-title">SENIOR ANALYST</div>
+            <Link to="/senior-dashboard" className={`nav-item ${isActive('/senior-dashboard')}`}>
+              <Target size={20} />
+              <span>My Dashboard</span>
+            </Link>
+            <Link to="/dashboard" className={`nav-item ${isActive('/dashboard')}`}>
               <LayoutDashboard size={20} />
-              <span>Dashboard</span>
+              <span>Ops Dashboard</span>
             </Link>
             <Link to="/feed" className={`nav-item ${isActive('/feed')}`}>
               <Activity size={20} />
@@ -84,7 +114,8 @@ const Sidebar = () => {
         {/* Employee Navigation */}
         {role === 'employee' && (
           <>
-            <Link to="/my-status" className={`nav-item ${isActive('/my-status') || isActive('/')}`}>
+            <div className="nav-section-title">MY WORKSPACE</div>
+            <Link to="/my-status" className={`nav-item ${isActive('/my-status')}`}>
               <Shield size={20} />
               <span>My Security Status</span>
             </Link>
@@ -92,12 +123,26 @@ const Sidebar = () => {
         )}
       </nav>
 
-      {/* Logout */}
+      {/* Sign Out Button - IMPROVED */}
       <div className="sidebar-footer">
-        <button className="logout-btn" onClick={handleLogout}>
-          <LogOut size={20} />
-          <span>Logout</span>
-        </button>
+        {!showLogoutConfirm ? (
+          <button className="signout-btn" onClick={() => setShowLogoutConfirm(true)}>
+            <Power size={20} />
+            <span>Sign Out</span>
+          </button>
+        ) : (
+          <div className="logout-confirm">
+            <p>Sign out?</p>
+            <div className="confirm-buttons">
+              <button className="btn-confirm" onClick={handleLogout}>
+                Yes
+              </button>
+              <button className="btn-cancel" onClick={() => setShowLogoutConfirm(false)}>
+                No
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </aside>
   );

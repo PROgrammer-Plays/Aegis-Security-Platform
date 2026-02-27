@@ -1,4 +1,4 @@
-// routes/auth.routes.js - FIXED Authentication Routes (No Hooks Interference)
+// routes/auth.routes.js - Enhanced Auth with Passwordless Login & Requests
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
@@ -9,8 +9,7 @@ const { JWT_SECRET, JWT_EXPIRES_IN } = require('../config/constants');
 
 /**
  * POST /api/auth/login
- * Login user and return JWT token
- * FIXED: Direct bcrypt comparison, no model methods
+ * Login with support for passwordless login
  */
 router.post('/login', async (req, res) => {
     try {
@@ -18,9 +17,8 @@ router.post('/login', async (req, res) => {
         
         console.log(`🔑 Login attempt: ${username}`);
         
-        if (!username || !password) {
-            console.log('❌ Missing username or password');
-            return res.status(400).json({ error: 'Username and password required' });
+        if (!username) {
+            return res.status(400).json({ error: 'Username required' });
         }
         
         // Find user - use .lean() to get plain object (no mongoose magic)
@@ -34,17 +32,74 @@ router.post('/login', async (req, res) => {
         }
         
         console.log(`✅ User found: ${user.username}`);
-        console.log(`🔍 Password hash (first 10 chars): ${user.password.substring(0, 10)}`);
-        console.log(`🔍 Comparing password...`);
         
-        // Check if active
+        // Check if account is locked
+        if (user.isLocked) {
+            console.log(`🔒 Account locked: ${username}`);
+            return res.status(403).json({ 
+                error: 'Account is locked',
+                reason: user.lockReason,
+                message: 'Your account has been locked. Please contact an administrator or submit an unlock request.'
+            });
+        }
+        
+        // Check if account is active
         if (!user.isActive) {
             console.log(`❌ Account disabled: ${username}`);
             return res.status(403).json({ error: 'Account is disabled. Contact administrator.' });
         }
         
+        // PASSWORDLESS LOGIN CHECK
+        if (user.allowPasswordlessLogin) {
+            console.log(`🔓 Passwordless login allowed for: ${username}`);
+            
+            // Allow login without password
+            // Update last login
+            await User.collection.updateOne(
+                { _id: user._id },
+                { $set: { lastLogin: new Date() } }
+            );
+            
+            // Create JWT token
+            const token = jwt.sign(
+                { 
+                    id: user._id.toString(),
+                    username: user.username,
+                    role: user.role,
+                    assigned_ip: user.assigned_ip,
+                    assigned_host: user.assigned_host
+                },
+                JWT_SECRET,
+                { expiresIn: JWT_EXPIRES_IN }
+            );
+            
+            console.log(`✅ Passwordless login successful: ${user.username} (${user.role})`);
+            
+            return res.json({
+                token,
+                user: {
+                    id: user._id.toString(),
+                    username: user.username,
+                    role: user.role,
+                    fullName: user.fullName,
+                    email: user.email,
+                    assigned_ip: user.assigned_ip,
+                    assigned_host: user.assigned_host,
+                    mustChangePassword: true // Flag to force password change
+                },
+                message: 'Passwordless login successful. Please change your password immediately.'
+            });
+        }
+        
+        // REGULAR LOGIN - Password required
+        if (!password) {
+            return res.status(400).json({ error: 'Password required' });
+        }
+        
+        console.log(`🔍 Password hash (first 10 chars): ${user.password.substring(0, 10)}`);
+        console.log(`🔍 Comparing password...`);
+        
         // CRITICAL: Direct bcrypt comparison
-        // Don't use user.comparePassword() or any model methods
         const validPassword = await bcrypt.compare(password, user.password);
         
         console.log(`🔍 Password comparison result: ${validPassword}`);
@@ -66,6 +121,8 @@ router.post('/login', async (req, res) => {
                 id: user._id.toString(),
                 username: user.username,
                 role: user.role,
+                customRole: user.customRole,
+                permissions: user.permissions,
                 assigned_ip: user.assigned_ip,
                 assigned_host: user.assigned_host
             },
@@ -82,6 +139,8 @@ router.post('/login', async (req, res) => {
                 id: user._id.toString(),
                 username: user.username,
                 role: user.role,
+                customRole: user.customRole,
+                permissions: user.permissions,
                 fullName: user.fullName,
                 email: user.email,
                 assigned_ip: user.assigned_ip,
@@ -95,43 +154,77 @@ router.post('/login', async (req, res) => {
 });
 
 /**
- * POST /api/auth/register
- * Register new user (public - optional)
+ * POST /api/auth/request-unlock
+ * Request account unlock (for locked users)
  */
-router.post('/register', async (req, res) => {
+router.post('/request-unlock', async (req, res) => {
     try {
-        const { username, password, fullName, email } = req.body;
+        const { username, message } = req.body;
         
-        // Check if user exists
-        const existingUser = await User.findOne({ username: username.toLowerCase() });
-        if (existingUser) {
-            return res.status(400).json({ error: 'Username already exists' });
+        if (!username) {
+            return res.status(400).json({ error: 'Username required' });
         }
         
-        // Hash password directly
-        const hashedPassword = await bcrypt.hash(password, 10);
+        const user = await User.findOne({ username: username.toLowerCase() });
         
-        // Insert directly to avoid hooks
-        await User.collection.insertOne({
-            username: username.toLowerCase(),
-            password: hashedPassword,
-            fullName,
-            email,
-            role: 'employee',
-            isActive: true,
-            createdAt: new Date(),
-            updatedAt: new Date()
-        });
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
         
-        console.log(`👤 New user registered: ${username}`);
+        if (!user.isLocked) {
+            return res.status(400).json({ error: 'Account is not locked' });
+        }
+        
+        user.unlockRequestPending = true;
+        user.unlockRequestMessage = message || 'Please unlock my account';
+        user.unlockRequestedAt = new Date();
+        await user.save();
+        
+        console.log(`🔓 Unlock request submitted by: ${username}`);
         
         res.json({ 
-            message: 'User registered successfully',
-            username: username.toLowerCase()
+            message: 'Unlock request submitted. An administrator will review your request.' 
         });
     } catch (error) {
-        console.error('Registration error:', error);
-        res.status(500).json({ error: 'Server error during registration' });
+        console.error('Error submitting unlock request:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+/**
+ * POST /api/auth/request-password-reset
+ * Request password reset (authenticated users)
+ */
+router.post('/request-password-reset', authenticate, async (req, res) => {
+    try {
+        const { message } = req.body;
+        
+        const user = await User.findById(req.user.id);
+        
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        
+        // Admin cannot request password reset
+        if (user.role === 'admin') {
+            return res.status(400).json({ 
+                error: 'Administrators cannot request password reset' 
+            });
+        }
+        
+        user.passwordResetRequested = true;
+        user.passwordResetRequestMessage = message || 'Forgot password';
+        user.passwordResetRequestedAt = new Date();
+        await user.save();
+        
+        console.log(`🔒 Password reset requested by: ${user.username}`);
+        
+        res.json({ 
+            message: 'Password reset request submitted. An administrator will approve your request.' 
+        });
+    } catch (error) {
+        console.error('Error requesting password reset:', error);
+        res.status(500).json({ error: 'Server error' });
     }
 });
 
@@ -156,7 +249,7 @@ router.get('/profile', authenticate, async (req, res) => {
 
 /**
  * PATCH /api/auth/change-password
- * Change user password
+ * Change user password (for passwordless login users)
  */
 router.patch('/change-password', authenticate, async (req, res) => {
     try {
@@ -166,6 +259,39 @@ router.patch('/change-password', authenticate, async (req, res) => {
         
         if (!user) {
             return res.status(404).json({ error: 'User not found' });
+        }
+        
+        // If passwordless login is enabled, allow changing without current password
+        if (user.allowPasswordlessLogin) {
+            if (!newPassword) {
+                return res.status(400).json({ error: 'New password is required' });
+            }
+            
+            // Hash new password
+            const hashedPassword = await bcrypt.hash(newPassword, 10);
+            
+            // Update directly to avoid hooks
+            await User.collection.updateOne(
+                { _id: user._id },
+                { 
+                    $set: { 
+                        password: hashedPassword,
+                        allowPasswordlessLogin: false, // Disable passwordless after setting password
+                        updatedAt: new Date()
+                    }
+                }
+            );
+            
+            console.log(`🔒 Password set for passwordless user: ${user.username}`);
+            
+            return res.json({ message: 'Password set successfully' });
+        }
+        
+        // Regular password change - verify current password
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({ 
+                error: 'Current password and new password are required' 
+            });
         }
         
         // Verify current password - direct comparison

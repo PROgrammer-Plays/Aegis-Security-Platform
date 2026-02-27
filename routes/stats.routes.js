@@ -1,4 +1,4 @@
-// routes/stats.routes.js - Dashboard Statistics Routes
+// routes/stats.routes.js - Dashboard Statistics Routes (FIXED for Senior Access)
 const express = require('express');
 const router = express.Router();
 const Alert = require('../models/Alert');
@@ -8,6 +8,7 @@ const { buildRoleFilter } = require('../middleware/rbac');
 /**
  * GET /api/stats
  * Get dashboard statistics with RBAC filtering
+ * FIXED: Allow all authenticated users (admin, senior, employee)
  */
 router.get('/', authenticate, async (req, res) => {
     try {
@@ -31,6 +32,15 @@ router.get('/', authenticate, async (req, res) => {
                                 recent: { $sum: 1 },
                                 criticalCount: {
                                     $sum: { $cond: [{ $eq: ['$severity', 'Critical'] }, 1, 0] }
+                                },
+                                highCount: {
+                                    $sum: { $cond: [{ $eq: ['$severity', 'High'] }, 1, 0] }
+                                },
+                                mediumCount: {
+                                    $sum: { $cond: [{ $eq: ['$severity', 'Medium'] }, 1, 0] }
+                                },
+                                lowCount: {
+                                    $sum: { $cond: [{ $eq: ['$severity', 'Low'] }, 1, 0] }
                                 },
                                 incidentCount: {
                                     $sum: { $cond: [{ $eq: ['$engine', 'CORRELATION BRAIN'] }, 1, 0] }
@@ -73,7 +83,10 @@ router.get('/', authenticate, async (req, res) => {
         const result = stats[0];
         const overview = result.overview[0] || { 
             recent: 0, 
-            criticalCount: 0, 
+            criticalCount: 0,
+            highCount: 0,
+            mediumCount: 0,
+            lowCount: 0,
             incidentCount: 0 
         };
         
@@ -100,8 +113,8 @@ router.get('/', authenticate, async (req, res) => {
  */
 router.get('/detailed', authenticate, async (req, res) => {
     try {
-        // Employees don't get detailed stats
-        if (req.user.role === 'employee') {
+        // Allow both admin and senior
+        if (req.user.role !== 'admin' && req.user.role !== 'senior') {
             return res.status(403).json({ 
                 error: 'Detailed statistics require senior analyst or admin access' 
             });
@@ -155,7 +168,7 @@ router.get('/detailed', authenticate, async (req, res) => {
             timestamp: { $gte: timeAgo }
         })
         .sort({ timestamp: -1 })
-        .limit(5)
+        .limit(10)
         .select('engine alertType details timestamp status');
         
         // Correlation Incidents
@@ -174,6 +187,171 @@ router.get('/detailed', authenticate, async (req, res) => {
         });
     } catch (error) {
         console.error('Detailed stats error:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+/**
+ * GET /api/stats/war-room
+ * Get war room data (Critical and High alerts for senior+)
+ */
+router.get('/war-room', authenticate, async (req, res) => {
+    try {
+        // Only senior and admin can access war room
+        if (req.user.role !== 'admin' && req.user.role !== 'senior') {
+            return res.status(403).json({ 
+                error: 'War room access requires senior analyst or admin role' 
+            });
+        }
+        
+        const { hours = 24 } = req.query;
+        const timeAgo = new Date(Date.now() - hours * 60 * 60 * 1000);
+        
+        console.log(`⚔️  War room data for ${req.user.username} (${req.user.role})`);
+        
+        // Get Critical and High severity alerts
+        const criticalAlerts = await Alert.find({
+            severity: { $in: ['Critical', 'High'] },
+            timestamp: { $gte: timeAgo }
+        })
+        .sort({ 
+            severity: 1, // Critical first (alphabetically before High)
+            timestamp: -1 
+        })
+        .limit(100);
+        
+        // Get escalated/priority alerts
+        const escalatedAlerts = await Alert.find({
+            isEscalated: true,
+            timestamp: { $gte: timeAgo }
+        })
+        .sort({ escalatedAt: -1 })
+        .limit(50);
+        
+        // Get correlation brain incidents
+        const correlationIncidents = await Alert.find({
+            engine: 'CORRELATION BRAIN',
+            timestamp: { $gte: timeAgo }
+        })
+        .sort({ timestamp: -1 })
+        .limit(20);
+        
+        res.json({
+            criticalAlerts,
+            escalatedAlerts,
+            correlationIncidents,
+            total: criticalAlerts.length,
+            escalatedCount: escalatedAlerts.length
+        });
+    } catch (error) {
+        console.error('War room error:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+/**
+ * GET /api/stats/forensics
+ * Get forensics data for investigation
+ */
+router.get('/forensics', authenticate, async (req, res) => {
+    try {
+        // Only senior and admin can access forensics
+        if (req.user.role !== 'admin' && req.user.role !== 'senior') {
+            return res.status(403).json({ 
+                error: 'Forensics access requires senior analyst or admin role' 
+            });
+        }
+        
+        const { hours = 168, entity } = req.query; // Default 7 days
+        const timeAgo = new Date(Date.now() - hours * 60 * 60 * 1000);
+        
+        console.log(`🔍 Forensics data for ${req.user.username} - entity: ${entity || 'all'}`);
+        
+        let query = { timestamp: { $gte: timeAgo } };
+        
+        // Filter by specific entity if provided
+        if (entity) {
+            query.$or = [
+                { 'details.ip_address': entity },
+                { 'details.source_ip': entity },
+                { 'details.destination_ip': entity },
+                { 'details.target_entity': entity },
+                { 'details.user_id': entity }
+            ];
+        }
+        
+        // Get all alerts for the entity/timeframe
+        const alerts = await Alert.find(query)
+            .sort({ timestamp: -1 })
+            .limit(500);
+        
+        // Timeline analysis
+        const timeline = await Alert.aggregate([
+            { $match: query },
+            {
+                $group: {
+                    _id: {
+                        $dateToString: {
+                            format: '%Y-%m-%d %H:00',
+                            date: '$timestamp'
+                        }
+                    },
+                    count: { $sum: 1 },
+                    severities: { $push: '$severity' },
+                    engines: { $addToSet: '$engine' }
+                }
+            },
+            { $sort: { _id: 1 } }
+        ]);
+        
+        // Attack patterns
+        const patterns = await Alert.aggregate([
+            { $match: query },
+            {
+                $group: {
+                    _id: '$alertType',
+                    count: { $sum: 1 },
+                    engines: { $addToSet: '$engine' },
+                    severities: { $push: '$severity' }
+                }
+            },
+            { $sort: { count: -1 } }
+        ]);
+        
+        // Affected entities
+        const entities = await Alert.aggregate([
+            { $match: query },
+            {
+                $group: {
+                    _id: {
+                        $ifNull: [
+                            "$details.target_entity",
+                            { $ifNull: [
+                                "$details.ip_address",
+                                "$details.source_ip"
+                            ]}
+                        ]
+                    },
+                    count: { $sum: 1 },
+                    alertTypes: { $addToSet: '$alertType' },
+                    firstSeen: { $min: '$timestamp' },
+                    lastSeen: { $max: '$timestamp' }
+                }
+            },
+            { $match: { _id: { $ne: null } } },
+            { $sort: { count: -1 } },
+            { $limit: 20 }
+        ]);
+        
+        res.json({
+            alerts,
+            timeline,
+            patterns,
+            entities,
+            total: alerts.length
+        });
+    } catch (error) {
+        console.error('Forensics error:', error);
         res.status(500).json({ error: 'Server error' });
     }
 });

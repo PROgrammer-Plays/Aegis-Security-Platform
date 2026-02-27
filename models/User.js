@@ -1,4 +1,4 @@
-// models/User.js - Fixed User Model (No Double Hashing)
+// models/User.js - Enhanced User Model with Custom Roles & Access Requests
 const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
 
@@ -16,9 +16,26 @@ const UserSchema = new mongoose.Schema({
     },
     role: { 
         type: String, 
-        enum: ['admin', 'senior', 'employee'], 
+        enum: ['admin', 'senior', 'employee', 'custom'], 
         default: 'employee',
         index: true
+    },
+    customRole: {
+        type: String,
+        default: null
+    },
+    permissions: {
+        viewAlerts: { type: Boolean, default: true },
+        createAlerts: { type: Boolean, default: false },
+        updateAlerts: { type: Boolean, default: false },
+        deleteAlerts: { type: Boolean, default: false },
+        viewUsers: { type: Boolean, default: false },
+        manageUsers: { type: Boolean, default: false },
+        viewStats: { type: Boolean, default: true },
+        viewDetailedStats: { type: Boolean, default: false },
+        accessWarRoom: { type: Boolean, default: false },
+        accessForensics: { type: Boolean, default: false },
+        manageRoles: { type: Boolean, default: false }
     },
     assigned_ip: { 
         type: String, 
@@ -40,6 +57,46 @@ const UserSchema = new mongoose.Schema({
     isActive: {
         type: Boolean,
         default: true
+    },
+    isLocked: {
+        type: Boolean,
+        default: false
+    },
+    lockReason: {
+        type: String,
+        default: null
+    },
+    lockedAt: {
+        type: Date,
+        default: null
+    },
+    unlockRequestPending: {
+        type: Boolean,
+        default: false
+    },
+    unlockRequestMessage: {
+        type: String,
+        default: null
+    },
+    unlockRequestedAt: {
+        type: Date,
+        default: null
+    },
+    passwordResetRequested: {
+        type: Boolean,
+        default: false
+    },
+    passwordResetRequestMessage: {
+        type: String,
+        default: null
+    },
+    passwordResetRequestedAt: {
+        type: Date,
+        default: null
+    },
+    allowPasswordlessLogin: {
+        type: Boolean,
+        default: false
     },
     lastLogin: {
         type: Date,
@@ -75,18 +132,51 @@ UserSchema.methods.updateLastLogin = function() {
     return this.save();
 };
 
-// ===== STATIC METHODS =====
+/**
+ * Lock user account
+ */
+UserSchema.methods.lockAccount = function(reason) {
+    this.isLocked = true;
+    this.lockReason = reason;
+    this.lockedAt = new Date();
+    return this.save();
+};
 
 /**
- * Create default admin (no longer used - moved to service)
+ * Unlock user account
  */
-UserSchema.statics.createDefaultAdmin = async function() {
-    console.log('⚠️  Use admin.service.js createDefaultAdmin() instead');
-    return null;
+UserSchema.methods.unlockAccount = function() {
+    this.isLocked = false;
+    this.lockReason = null;
+    this.lockedAt = null;
+    this.unlockRequestPending = false;
+    this.unlockRequestMessage = null;
+    this.unlockRequestedAt = null;
+    return this.save();
+};
+
+/**
+ * Request unlock
+ */
+UserSchema.methods.requestUnlock = function(message) {
+    this.unlockRequestPending = true;
+    this.unlockRequestMessage = message;
+    this.unlockRequestedAt = new Date();
+    return this.save();
+};
+
+/**
+ * Request password reset
+ */
+UserSchema.methods.requestPasswordReset = function(message) {
+    this.passwordResetRequested = true;
+    this.passwordResetRequestMessage = message;
+    this.passwordResetRequestedAt = new Date();
+    return this.save();
 };
 
 // ===== PRE-SAVE HOOK (CONDITIONAL) =====
-// IMPORTANT: Only hash if password is modified AND not already hashed
+// Only hash if password is modified AND not already hashed
 UserSchema.pre('save', async function(next) {
     // Skip if password wasn't modified
     if (!this.isModified('password')) {

@@ -1,9 +1,9 @@
-// routes/alerts.routes.js - Alerts CRUD Routes
+// routes/alerts.routes.js - Enhanced Alerts Routes with Escalation
 const express = require('express');
 const router = express.Router();
 const Alert = require('../models/Alert');
 const { authenticate, optionalAuth } = require('../middleware/auth');
-const { buildRoleFilter, verifyAlertAction } = require('../middleware/rbac');
+const { buildRoleFilter, verifyAlertAction, verifyAdmin } = require('../middleware/rbac');
 const { broadcastNewAlert, broadcastAlertUpdate } = require('../services/socket.service');
 
 /**
@@ -41,13 +41,14 @@ router.post('/', optionalAuth, async (req, res) => {
  */
 router.get('/', authenticate, async (req, res) => {
     try {
-        const { limit = 100, severity, engine, status, skip = 0 } = req.query;
+        const { limit = 100, severity, engine, status, skip = 0, escalated } = req.query;
         
         // Build base query from filters
         let baseQuery = {};
         if (severity) baseQuery.severity = severity;
         if (engine) baseQuery.engine = engine;
         if (status) baseQuery.status = status;
+        if (escalated === 'true') baseQuery.isEscalated = true;
         
         // Apply RBAC filtering
         const query = buildRoleFilter(req.user, baseQuery);
@@ -56,7 +57,11 @@ router.get('/', authenticate, async (req, res) => {
         
         // Fetch alerts
         const alerts = await Alert.find(query)
-            .sort({ timestamp: -1 })
+            .sort({ 
+                isEscalated: -1, // Escalated first
+                escalationPriority: 1, // Then by priority
+                timestamp: -1  // Then by time
+            })
             .skip(parseInt(skip))
             .limit(parseInt(limit));
         
@@ -112,7 +117,7 @@ router.get('/:id', authenticate, async (req, res) => {
 router.patch('/:id/status', authenticate, verifyAlertAction, async (req, res) => {
     try {
         const { id } = req.params;
-        const { status } = req.body;
+        const { status, resolutionNotes } = req.body;
         
         const alert = await Alert.findById(id);
         
@@ -122,6 +127,16 @@ router.patch('/:id/status', authenticate, verifyAlertAction, async (req, res) =>
         
         // Update status
         alert.status = status;
+        
+        // If resolved, record resolution
+        if (status === 'Resolved' || status === 'False Positive') {
+            alert.resolvedBy = req.user.username;
+            alert.resolvedAt = new Date();
+            if (resolutionNotes) {
+                alert.resolutionNotes = resolutionNotes;
+            }
+        }
+        
         await alert.save();
         
         console.log(`✅ Alert ${id} status → ${status} by ${req.user.username} (${req.user.role})`);
@@ -133,6 +148,246 @@ router.patch('/:id/status', authenticate, verifyAlertAction, async (req, res) =>
     } catch (error) {
         console.error('Status update error:', error);
         res.status(500).json({ error: 'Server error updating status' });
+    }
+});
+
+/**
+ * PATCH /api/alerts/:id/escalate
+ * Escalate alert (Admin only)
+ */
+router.patch('/:id/escalate', authenticate, verifyAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { 
+            priority = 'High', 
+            reason, 
+            assignTo, 
+            notes 
+        } = req.body;
+        
+        const alert = await Alert.findById(id);
+        
+        if (!alert) {
+            return res.status(404).json({ error: 'Alert not found' });
+        }
+        
+        // Mark as escalated
+        alert.isEscalated = true;
+        alert.escalatedBy = req.user.username;
+        alert.escalatedAt = new Date();
+        alert.escalationReason = reason || 'Escalated by administrator';
+        alert.escalationPriority = priority;
+        alert.escalationNotes = notes;
+        
+        // Assign to senior analyst if specified
+        if (assignTo) {
+            alert.assignedTo = assignTo;
+            alert.assignedAt = new Date();
+        }
+        
+        // Update status if still new
+        if (alert.status === 'New') {
+            alert.status = 'In Progress';
+        }
+        
+        await alert.save();
+        
+        console.log(`🚨 Alert ${id} escalated to ${priority} priority by ${req.user.username}`);
+        if (assignTo) {
+            console.log(`   → Assigned to: ${assignTo}`);
+        }
+        
+        // Broadcast update
+        broadcastAlertUpdate(alert);
+        
+        res.json({
+            message: 'Alert escalated successfully',
+            alert
+        });
+    } catch (error) {
+        console.error('Escalation error:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+/**
+ * PATCH /api/alerts/:id/de-escalate
+ * Remove escalation (Admin only)
+ */
+router.patch('/:id/de-escalate', authenticate, verifyAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        const alert = await Alert.findById(id);
+        
+        if (!alert) {
+            return res.status(404).json({ error: 'Alert not found' });
+        }
+        
+        alert.isEscalated = false;
+        alert.escalationPriority = 'Normal';
+        
+        await alert.save();
+        
+        console.log(`✅ Alert ${id} de-escalated by ${req.user.username}`);
+        
+        broadcastAlertUpdate(alert);
+        
+        res.json({
+            message: 'Escalation removed',
+            alert
+        });
+    } catch (error) {
+        console.error('De-escalation error:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+/**
+ * PATCH /api/alerts/:id/assign
+ * Assign alert to senior analyst (Admin only)
+ */
+router.patch('/:id/assign', authenticate, verifyAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { assignTo } = req.body;
+        
+        if (!assignTo) {
+            return res.status(400).json({ error: 'assignTo username required' });
+        }
+        
+        const alert = await Alert.findById(id);
+        
+        if (!alert) {
+            return res.status(404).json({ error: 'Alert not found' });
+        }
+        
+        alert.assignedTo = assignTo;
+        alert.assignedAt = new Date();
+        
+        if (alert.status === 'New') {
+            alert.status = 'In Progress';
+        }
+        
+        await alert.save();
+        
+        console.log(`👤 Alert ${id} assigned to ${assignTo} by ${req.user.username}`);
+        
+        broadcastAlertUpdate(alert);
+        
+        res.json({
+            message: `Alert assigned to ${assignTo}`,
+            alert
+        });
+    } catch (error) {
+        console.error('Assignment error:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+/**
+ * PATCH /api/alerts/:id/investigate
+ * Start investigation (Senior/Admin)
+ */
+router.patch('/:id/investigate', authenticate, async (req, res) => {
+    try {
+        // Only senior and admin can investigate
+        if (req.user.role !== 'admin' && req.user.role !== 'senior') {
+            return res.status(403).json({ 
+                error: 'Only senior analysts and administrators can start investigations' 
+            });
+        }
+        
+        const { id } = req.params;
+        const { note } = req.body;
+        
+        const alert = await Alert.findById(id);
+        
+        if (!alert) {
+            return res.status(404).json({ error: 'Alert not found' });
+        }
+        
+        if (!alert.investigationStarted) {
+            alert.investigationStarted = true;
+            alert.investigationStartedAt = new Date();
+            alert.investigationStartedBy = req.user.username;
+        }
+        
+        // Add investigation note
+        if (note) {
+            alert.investigationNotes.push({
+                timestamp: new Date(),
+                author: req.user.username,
+                note: note
+            });
+        }
+        
+        // Update status
+        if (alert.status === 'New') {
+            alert.status = 'In Progress';
+        }
+        
+        await alert.save();
+        
+        console.log(`🔍 Investigation started on alert ${id} by ${req.user.username}`);
+        
+        broadcastAlertUpdate(alert);
+        
+        res.json({
+            message: 'Investigation started',
+            alert
+        });
+    } catch (error) {
+        console.error('Investigation error:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+/**
+ * POST /api/alerts/:id/notes
+ * Add investigation note (Senior/Admin)
+ */
+router.post('/:id/notes', authenticate, async (req, res) => {
+    try {
+        // Only senior and admin
+        if (req.user.role !== 'admin' && req.user.role !== 'senior') {
+            return res.status(403).json({ 
+                error: 'Only senior analysts and administrators can add notes' 
+            });
+        }
+        
+        const { id } = req.params;
+        const { note } = req.body;
+        
+        if (!note) {
+            return res.status(400).json({ error: 'Note is required' });
+        }
+        
+        const alert = await Alert.findById(id);
+        
+        if (!alert) {
+            return res.status(404).json({ error: 'Alert not found' });
+        }
+        
+        alert.investigationNotes.push({
+            timestamp: new Date(),
+            author: req.user.username,
+            note: note
+        });
+        
+        await alert.save();
+        
+        console.log(`📝 Note added to alert ${id} by ${req.user.username}`);
+        
+        broadcastAlertUpdate(alert);
+        
+        res.json({
+            message: 'Note added',
+            alert
+        });
+    } catch (error) {
+        console.error('Note error:', error);
+        res.status(500).json({ error: 'Server error' });
     }
 });
 
