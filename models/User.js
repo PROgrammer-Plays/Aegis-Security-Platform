@@ -1,4 +1,4 @@
-// models/User.js - Enhanced User Model with Custom Roles & Access Requests
+// models/User.js - COMPLETE with Password System Support
 const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
 
@@ -16,26 +16,9 @@ const UserSchema = new mongoose.Schema({
     },
     role: { 
         type: String, 
-        enum: ['admin', 'senior', 'employee', 'custom'], 
+        enum: ['admin', 'senior', 'employee'], 
         default: 'employee',
         index: true
-    },
-    customRole: {
-        type: String,
-        default: null
-    },
-    permissions: {
-        viewAlerts: { type: Boolean, default: true },
-        createAlerts: { type: Boolean, default: false },
-        updateAlerts: { type: Boolean, default: false },
-        deleteAlerts: { type: Boolean, default: false },
-        viewUsers: { type: Boolean, default: false },
-        manageUsers: { type: Boolean, default: false },
-        viewStats: { type: Boolean, default: true },
-        viewDetailedStats: { type: Boolean, default: false },
-        accessWarRoom: { type: Boolean, default: false },
-        accessForensics: { type: Boolean, default: false },
-        manageRoles: { type: Boolean, default: false }
     },
     assigned_ip: { 
         type: String, 
@@ -52,7 +35,9 @@ const UserSchema = new mongoose.Schema({
     },
     email: {
         type: String,
-        default: ''
+        default: '',
+        lowercase: true,
+        trim: true
     },
     isActive: {
         type: Boolean,
@@ -70,34 +55,44 @@ const UserSchema = new mongoose.Schema({
         type: Date,
         default: null
     },
-    unlockRequestPending: {
-        type: Boolean,
-        default: false
+    
+    // Password Reset
+    passwordReset: {
+        token: {
+            type: String,
+            default: null
+        },
+        expires: {
+            type: Date,
+            default: null
+        },
+        requestedAt: {
+            type: Date,
+            default: null
+        }
     },
-    unlockRequestMessage: {
-        type: String,
-        default: null
+    
+    // Temporary Password - UPDATED with reason field!
+    temporaryPassword: {
+        hash: {
+            type: String,
+            default: null
+        },
+        expiresAt: {
+            type: Date,
+            default: null
+        },
+        mustChange: {
+            type: Boolean,
+            default: true
+        },
+        reason: {  // NEW!
+            type: String,
+            enum: ['temporary', 'master_reset', 'admin_reset'],
+            default: 'temporary'
+        }
     },
-    unlockRequestedAt: {
-        type: Date,
-        default: null
-    },
-    passwordResetRequested: {
-        type: Boolean,
-        default: false
-    },
-    passwordResetRequestMessage: {
-        type: String,
-        default: null
-    },
-    passwordResetRequestedAt: {
-        type: Date,
-        default: null
-    },
-    allowPasswordlessLogin: {
-        type: Boolean,
-        default: false
-    },
+    
     lastLogin: {
         type: Date,
         default: null
@@ -149,33 +144,30 @@ UserSchema.methods.unlockAccount = function() {
     this.isLocked = false;
     this.lockReason = null;
     this.lockedAt = null;
-    this.unlockRequestPending = false;
-    this.unlockRequestMessage = null;
-    this.unlockRequestedAt = null;
     return this.save();
 };
 
 /**
- * Request unlock
+ * Check if password reset token is valid
  */
-UserSchema.methods.requestUnlock = function(message) {
-    this.unlockRequestPending = true;
-    this.unlockRequestMessage = message;
-    this.unlockRequestedAt = new Date();
-    return this.save();
+UserSchema.methods.isPasswordResetValid = function() {
+    if (!this.passwordReset || !this.passwordReset.token || !this.passwordReset.expires) {
+        return false;
+    }
+    return this.passwordReset.expires > new Date();
 };
 
 /**
- * Request password reset
+ * Check if temporary password is valid
  */
-UserSchema.methods.requestPasswordReset = function(message) {
-    this.passwordResetRequested = true;
-    this.passwordResetRequestMessage = message;
-    this.passwordResetRequestedAt = new Date();
-    return this.save();
+UserSchema.methods.isTemporaryPasswordValid = function() {
+    if (!this.temporaryPassword || !this.temporaryPassword.hash || !this.temporaryPassword.expiresAt) {
+        return false;
+    }
+    return this.temporaryPassword.expiresAt > new Date();
 };
 
-// ===== PRE-SAVE HOOK (CONDITIONAL) =====
+// ===== PRE-SAVE HOOK =====
 // Only hash if password is modified AND not already hashed
 UserSchema.pre('save', async function(next) {
     // Skip if password wasn't modified

@@ -1,4 +1,4 @@
-// src/App.js - COMPLETE with Senior Dashboard
+// src/App.js - UPDATED with Password Change Enforcement
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import io from 'socket.io-client';
@@ -13,19 +13,26 @@ import Forensics from './pages/Forensics';
 
 // --- Admin/Senior/Employee Pages ---
 import AdminDashboard from './pages/AdminDashboard';
-import SeniorDashboard from './pages/SeniorDashboard'; // NEW!
+import SeniorDashboard from './pages/SeniorDashboard';
 import UserManagement from './pages/UserManagement';
 import MySecurityStatus from './pages/MySecurityStatus';
+
+// --- Password Reset Pages ---
+import RequestPasswordReset from './pages/RequestPasswordReset';
+import PasswordReset from './pages/PasswordReset';
 
 // --- Components ---
 import Sidebar from './components/Sidebar';
 import Toast from './components/Toast';
+import ChangePasswordModal from './components/ChangePasswordModal'; // NEW!
 
 const SOCKET_SERVER_URL = "http://localhost:5000";
 
 function App() {
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [role, setRole] = useState(localStorage.getItem('role'));
+  const [mustChangePassword, setMustChangePassword] = useState(localStorage.getItem('mustChangePassword') === 'true'); // NEW!
+  const [passwordChangeReason, setPasswordChangeReason] = useState(localStorage.getItem('passwordChangeReason') || 'temporary'); // NEW!
   const [loading, setLoading] = useState(true);
 
   const [alerts, setAlerts] = useState([]);
@@ -37,16 +44,21 @@ function App() {
   useEffect(() => {
     const storedToken = localStorage.getItem('token');
     const storedRole = localStorage.getItem('role');
+    const storedMustChange = localStorage.getItem('mustChangePassword') === 'true';
+    const storedReason = localStorage.getItem('passwordChangeReason') || 'temporary';
+    
     if (storedToken) {
       setToken(storedToken);
       setRole(storedRole);
+      setMustChangePassword(storedMustChange);
+      setPasswordChangeReason(storedReason);
     }
     setLoading(false);
   }, []);
 
-  // Socket.IO Connection (Only if authenticated)
+  // Socket.IO Connection (Only if authenticated AND password changed)
   useEffect(() => {
-    if (!token) return;
+    if (!token || mustChangePassword) return;
 
     const socket = io(SOCKET_SERVER_URL);
     
@@ -86,11 +98,11 @@ function App() {
     return () => {
       socket.disconnect();
     };
-  }, [token]);
+  }, [token, mustChangePassword]);
 
-  // Data Fetching (Only if authenticated)
+  // Data Fetching (Only if authenticated AND password changed)
   useEffect(() => {
-    if (!token) return;
+    if (!token || mustChangePassword) return;
 
     const fetchInitialAlerts = async () => {
       try {
@@ -121,20 +133,57 @@ function App() {
     
     const interval = setInterval(fetchStats, 30000);
     return () => clearInterval(interval);
-  }, [token]);
+  }, [token, mustChangePassword]);
+
+  // Handle password changed - logout and redirect to login
+  const handlePasswordChanged = () => {
+    localStorage.clear();
+    setToken(null);
+    setRole(null);
+    setMustChangePassword(false);
+    window.location.href = '/login';
+  };
 
   if (loading) return <div className="app-loading">Loading...</div>;
 
-  // If not logged in, show Login
+  // PUBLIC ROUTES (No authentication required)
   if (!token) {
-    return <Login setToken={(t, r) => {
-      localStorage.setItem('token', t);
-      localStorage.setItem('role', r);
-      setToken(t);
-      setRole(r);
-    }} />;
+    return (
+      <Router>
+        <Routes>
+          <Route path="/login" element={<Login setToken={(t, r, mustChange, reason) => {
+            localStorage.setItem('token', t);
+            localStorage.setItem('role', r);
+            localStorage.setItem('mustChangePassword', mustChange ? 'true' : 'false');
+            localStorage.setItem('passwordChangeReason', reason || 'temporary');
+            setToken(t);
+            setRole(r);
+            setMustChangePassword(mustChange || false);
+            setPasswordChangeReason(reason || 'temporary');
+          }} />} />
+          
+          {/* Password Reset Routes */}
+          <Route path="/request-password-reset" element={<RequestPasswordReset />} />
+          <Route path="/reset-password/:token" element={<PasswordReset />} />
+          
+          {/* Redirect all other routes to login */}
+          <Route path="*" element={<Navigate to="/login" replace />} />
+        </Routes>
+      </Router>
+    );
   }
 
+  // FORCE PASSWORD CHANGE (if mustChangePassword is true)
+  if (mustChangePassword) {
+    return (
+      <ChangePasswordModal 
+        reason={passwordChangeReason}
+        onPasswordChanged={handlePasswordChanged}
+      />
+    );
+  }
+
+  // AUTHENTICATED ROUTES (normal dashboard access)
   return (
     <Router>
       <div className="app-container">

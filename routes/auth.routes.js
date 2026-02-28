@@ -1,15 +1,16 @@
-// routes/auth.routes.js - Enhanced Auth with Passwordless Login & Requests
+// routes/auth.routes.js - COMPLETE with Password System Support
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
+const crypto = require('crypto');
 const User = require('../models/User');
 const { authenticate } = require('../middleware/auth');
 const { JWT_SECRET, JWT_EXPIRES_IN } = require('../config/constants');
 
 /**
  * POST /api/auth/login
- * Login with support for passwordless login
+ * Login with support for temporary passwords and force password change
  */
 router.post('/login', async (req, res) => {
     try {
@@ -21,7 +22,6 @@ router.post('/login', async (req, res) => {
             return res.status(400).json({ error: 'Username required' });
         }
         
-        // Find user - use .lean() to get plain object (no mongoose magic)
         const user = await User.findOne({ 
             username: username.toLowerCase() 
         }).lean();
@@ -38,8 +38,7 @@ router.post('/login', async (req, res) => {
             console.log(`🔒 Account locked: ${username}`);
             return res.status(403).json({ 
                 error: 'Account is locked',
-                reason: user.lockReason,
-                message: 'Your account has been locked. Please contact an administrator or submit an unlock request.'
+                message: 'Your account has been locked. Please contact an administrator.'
             });
         }
         
@@ -49,67 +48,44 @@ router.post('/login', async (req, res) => {
             return res.status(403).json({ error: 'Account is disabled. Contact administrator.' });
         }
         
-        // PASSWORDLESS LOGIN CHECK
-        if (user.allowPasswordlessLogin) {
-            console.log(`🔓 Passwordless login allowed for: ${username}`);
-            
-            // Allow login without password
-            // Update last login
-            await User.collection.updateOne(
-                { _id: user._id },
-                { $set: { lastLogin: new Date() } }
-            );
-            
-            // Create JWT token
-            const token = jwt.sign(
-                { 
-                    id: user._id.toString(),
-                    username: user.username,
-                    role: user.role,
-                    assigned_ip: user.assigned_ip,
-                    assigned_host: user.assigned_host
-                },
-                JWT_SECRET,
-                { expiresIn: JWT_EXPIRES_IN }
-            );
-            
-            console.log(`✅ Passwordless login successful: ${user.username} (${user.role})`);
-            
-            return res.json({
-                token,
-                user: {
-                    id: user._id.toString(),
-                    username: user.username,
-                    role: user.role,
-                    fullName: user.fullName,
-                    email: user.email,
-                    assigned_ip: user.assigned_ip,
-                    assigned_host: user.assigned_host,
-                    mustChangePassword: true // Flag to force password change
-                },
-                message: 'Passwordless login successful. Please change your password immediately.'
-            });
+        // TEMPORARY PASSWORD CHECK - NEW!
+        let isTemporaryPassword = false;
+        let passwordChangeReason = null;
+        
+        if (user.temporaryPassword?.hash) {
+            // Check if temp password expired
+            if (Date.now() > new Date(user.temporaryPassword.expiresAt).getTime()) {
+                // Expired - clear it
+                await User.collection.updateOne(
+                    { _id: user._id },
+                    { $unset: { temporaryPassword: '' } }
+                );
+            } else {
+                // Try temp password
+                const validTemp = await bcrypt.compare(password, user.temporaryPassword.hash);
+                if (validTemp) {
+                    isTemporaryPassword = true;
+                    passwordChangeReason = user.temporaryPassword.reason || 'temporary';
+                    console.log(`🔑 Temporary password used for: ${username} (Reason: ${passwordChangeReason})`);
+                }
+            }
         }
         
-        // REGULAR LOGIN - Password required
-        if (!password) {
-            return res.status(400).json({ error: 'Password required' });
+        // Regular password check
+        if (!isTemporaryPassword) {
+            if (!password) {
+                return res.status(400).json({ error: 'Password required' });
+            }
+            
+            const validPassword = await bcrypt.compare(password, user.password);
+            
+            if (!validPassword) {
+                console.log(`❌ Invalid password for: ${username}`);
+                return res.status(401).json({ error: 'Invalid credentials' });
+            }
         }
         
-        console.log(`🔍 Password hash (first 10 chars): ${user.password.substring(0, 10)}`);
-        console.log(`🔍 Comparing password...`);
-        
-        // CRITICAL: Direct bcrypt comparison
-        const validPassword = await bcrypt.compare(password, user.password);
-        
-        console.log(`🔍 Password comparison result: ${validPassword}`);
-        
-        if (!validPassword) {
-            console.log(`❌ Invalid password for: ${username}`);
-            return res.status(401).json({ error: 'Invalid credentials' });
-        }
-        
-        // Update last login - use direct DB update to avoid hooks
+        // Update last login
         await User.collection.updateOne(
             { _id: user._id },
             { $set: { lastLogin: new Date() } }
@@ -121,8 +97,6 @@ router.post('/login', async (req, res) => {
                 id: user._id.toString(),
                 username: user.username,
                 role: user.role,
-                customRole: user.customRole,
-                permissions: user.permissions,
                 assigned_ip: user.assigned_ip,
                 assigned_host: user.assigned_host
             },
@@ -131,21 +105,21 @@ router.post('/login', async (req, res) => {
         );
         
         console.log(`✅ Login successful: ${user.username} (${user.role})`);
-        console.log(`🎫 Token generated (first 20 chars): ${token.substring(0, 20)}...`);
         
+        // Return with mustChangePassword flag
         res.json({
             token,
             user: {
                 id: user._id.toString(),
                 username: user.username,
                 role: user.role,
-                customRole: user.customRole,
-                permissions: user.permissions,
                 fullName: user.fullName,
                 email: user.email,
                 assigned_ip: user.assigned_ip,
                 assigned_host: user.assigned_host
-            }
+            },
+            mustChangePassword: isTemporaryPassword,  // NEW!
+            passwordChangeReason: passwordChangeReason  // NEW!
         });
     } catch (error) {
         console.error('❌ Login error:', error);
@@ -154,76 +128,195 @@ router.post('/login', async (req, res) => {
 });
 
 /**
- * POST /api/auth/request-unlock
- * Request account unlock (for locked users)
+ * POST /api/auth/request-password-reset
+ * Request password reset via email (public route)
  */
-router.post('/request-unlock', async (req, res) => {
+router.post('/request-password-reset', async (req, res) => {
     try {
-        const { username, message } = req.body;
+        const { email } = req.body;
         
-        if (!username) {
-            return res.status(400).json({ error: 'Username required' });
+        if (!email) {
+            return res.status(400).json({ error: 'Email required' });
         }
         
-        const user = await User.findOne({ username: username.toLowerCase() });
+        const user = await User.findOne({ email: email.toLowerCase() });
         
+        // Always return success (don't reveal if email exists - security best practice)
         if (!user) {
-            return res.status(404).json({ error: 'User not found' });
+            console.log(`⚠️ Password reset requested for non-existent email: ${email}`);
+            return res.json({ 
+                message: 'If an account exists with that email, a reset link has been sent.' 
+            });
         }
         
-        if (!user.isLocked) {
-            return res.status(400).json({ error: 'Account is not locked' });
-        }
+        // Generate secure reset token
+        const resetToken = crypto.randomBytes(32).toString('hex');
+        const resetTokenHash = crypto
+            .createHash('sha256')
+            .update(resetToken)
+            .digest('hex');
         
-        user.unlockRequestPending = true;
-        user.unlockRequestMessage = message || 'Please unlock my account';
-        user.unlockRequestedAt = new Date();
+        // Save to database (expires in 1 hour)
+        user.passwordReset = {
+            token: resetTokenHash,
+            expires: new Date(Date.now() + 3600000), // 1 hour
+            requestedAt: new Date()
+        };
         await user.save();
         
-        console.log(`🔓 Unlock request submitted by: ${username}`);
+        console.log(`📧 Password reset token generated for: ${user.username}`);
+        
+        // DEV MODE: Log token (in production, send email!)
+        console.log(`
+        =====================================================
+        PASSWORD RESET TOKEN (DEV MODE)
+        User: ${user.username}
+        Reset URL: http://localhost:3000/reset-password/${resetToken}
+        Expires: ${new Date(Date.now() + 3600000).toLocaleString()}
+        =====================================================
+        `);
         
         res.json({ 
-            message: 'Unlock request submitted. An administrator will review your request.' 
+            message: 'If an account exists with that email, a reset link has been sent.',
+            // DEV MODE ONLY
+            devMode: {
+                resetToken,
+                resetUrl: `http://localhost:3000/reset-password/${resetToken}`
+            }
         });
     } catch (error) {
-        console.error('Error submitting unlock request:', error);
+        console.error('❌ Request reset error:', error);
         res.status(500).json({ error: 'Server error' });
     }
 });
 
 /**
- * POST /api/auth/request-password-reset
- * Request password reset (authenticated users)
+ * POST /api/auth/reset-password
+ * Reset password using token
  */
-router.post('/request-password-reset', authenticate, async (req, res) => {
+router.post('/reset-password', async (req, res) => {
     try {
-        const { message } = req.body;
+        const { token, newPassword } = req.body;
         
-        const user = await User.findById(req.user.id);
+        if (!token || !newPassword) {
+            return res.status(400).json({ error: 'Token and new password required' });
+        }
+        
+        // Validate password strength
+        if (newPassword.length < 8) {
+            return res.status(400).json({ error: 'Password must be at least 8 characters' });
+        }
+        
+        // Hash the token from URL
+        const resetTokenHash = crypto
+            .createHash('sha256')
+            .update(token)
+            .digest('hex');
+        
+        // Find user with valid token
+        const user = await User.findOne({
+            'passwordReset.token': resetTokenHash,
+            'passwordReset.expires': { $gt: new Date() }
+        });
+        
+        if (!user) {
+            console.log(`❌ Invalid or expired token`);
+            return res.status(400).json({ error: 'Invalid or expired reset token' });
+        }
+        
+        console.log(`🔒 Resetting password for: ${user.username}`);
+        
+        // Hash new password
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        
+        // Update password and clear reset token
+        await User.collection.updateOne(
+            { _id: user._id },
+            { 
+                $set: { 
+                    password: hashedPassword,
+                    updatedAt: new Date()
+                },
+                $unset: { 
+                    passwordReset: '',
+                    temporaryPassword: '' // Clear temp password if exists
+                }
+            }
+        );
+        
+        console.log(`✅ Password reset successful for: ${user.username}`);
+        
+        res.json({ message: 'Password reset successful. You can now login.' });
+    } catch (error) {
+        console.error('❌ Reset password error:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+/**
+ * POST /api/auth/change-password
+ * Change password (authenticated users) - UPDATED!
+ */
+router.post('/change-password', authenticate, async (req, res) => {
+    try {
+        const { currentPassword, newPassword } = req.body;
+        
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({ 
+                error: 'Current password and new password required' 
+            });
+        }
+        
+        if (newPassword.length < 8) {
+            return res.status(400).json({ error: 'Password must be at least 8 characters' });
+        }
+        
+        const user = await User.findById(req.user.id).lean();
         
         if (!user) {
             return res.status(404).json({ error: 'User not found' });
         }
         
-        // Admin cannot request password reset
-        if (user.role === 'admin') {
-            return res.status(400).json({ 
-                error: 'Administrators cannot request password reset' 
-            });
+        // Check if using temporary password
+        let isUsingTempPassword = false;
+        
+        if (user.temporaryPassword?.hash) {
+            const validTemp = await bcrypt.compare(currentPassword, user.temporaryPassword.hash);
+            if (validTemp) {
+                isUsingTempPassword = true;
+                console.log(`🔑 User changing from temporary password: ${user.username}`);
+            }
         }
         
-        user.passwordResetRequested = true;
-        user.passwordResetRequestMessage = message || 'Forgot password';
-        user.passwordResetRequestedAt = new Date();
-        await user.save();
+        // Verify current password (if not using temp)
+        if (!isUsingTempPassword) {
+            const validPassword = await bcrypt.compare(currentPassword, user.password);
+            
+            if (!validPassword) {
+                return res.status(401).json({ error: 'Current password is incorrect' });
+            }
+        }
         
-        console.log(`🔒 Password reset requested by: ${user.username}`);
+        // Hash new password
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
         
-        res.json({ 
-            message: 'Password reset request submitted. An administrator will approve your request.' 
-        });
+        // Update password and clear temp password
+        await User.collection.updateOne(
+            { _id: user._id },
+            { 
+                $set: { 
+                    password: hashedPassword, 
+                    updatedAt: new Date() 
+                },
+                $unset: { temporaryPassword: '' } // Clear temp password
+            }
+        );
+        
+        console.log(`🔒 Password changed successfully for: ${user.username}`);
+        
+        res.json({ message: 'Password changed successfully' });
     } catch (error) {
-        console.error('Error requesting password reset:', error);
+        console.error('❌ Change password error:', error);
         res.status(500).json({ error: 'Server error' });
     }
 });
@@ -243,78 +336,6 @@ router.get('/profile', authenticate, async (req, res) => {
         res.json({ user });
     } catch (error) {
         console.error('Profile error:', error);
-        res.status(500).json({ error: 'Server error' });
-    }
-});
-
-/**
- * PATCH /api/auth/change-password
- * Change user password (for passwordless login users)
- */
-router.patch('/change-password', authenticate, async (req, res) => {
-    try {
-        const { currentPassword, newPassword } = req.body;
-        
-        const user = await User.findById(req.user.id).lean();
-        
-        if (!user) {
-            return res.status(404).json({ error: 'User not found' });
-        }
-        
-        // If passwordless login is enabled, allow changing without current password
-        if (user.allowPasswordlessLogin) {
-            if (!newPassword) {
-                return res.status(400).json({ error: 'New password is required' });
-            }
-            
-            // Hash new password
-            const hashedPassword = await bcrypt.hash(newPassword, 10);
-            
-            // Update directly to avoid hooks
-            await User.collection.updateOne(
-                { _id: user._id },
-                { 
-                    $set: { 
-                        password: hashedPassword,
-                        allowPasswordlessLogin: false, // Disable passwordless after setting password
-                        updatedAt: new Date()
-                    }
-                }
-            );
-            
-            console.log(`🔒 Password set for passwordless user: ${user.username}`);
-            
-            return res.json({ message: 'Password set successfully' });
-        }
-        
-        // Regular password change - verify current password
-        if (!currentPassword || !newPassword) {
-            return res.status(400).json({ 
-                error: 'Current password and new password are required' 
-            });
-        }
-        
-        // Verify current password - direct comparison
-        const validPassword = await bcrypt.compare(currentPassword, user.password);
-        
-        if (!validPassword) {
-            return res.status(401).json({ error: 'Current password is incorrect' });
-        }
-        
-        // Hash new password
-        const hashedPassword = await bcrypt.hash(newPassword, 10);
-        
-        // Update directly to avoid hooks
-        await User.collection.updateOne(
-            { _id: user._id },
-            { $set: { password: hashedPassword, updatedAt: new Date() } }
-        );
-        
-        console.log(`🔒 Password changed for: ${user.username}`);
-        
-        res.json({ message: 'Password changed successfully' });
-    } catch (error) {
-        console.error('Password change error:', error);
         res.status(500).json({ error: 'Server error' });
     }
 });

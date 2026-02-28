@@ -1,4 +1,4 @@
-// src/pages/Forensics.js - Fixed with useCallback
+// src/pages/Forensics.js - FIXED with Authentication
 import React, { useState, useEffect, useCallback } from 'react';
 import './Forensics.css';
 
@@ -14,6 +14,8 @@ function Forensics() {
   });
   const [selectedAlert, setSelectedAlert] = useState(null);
 
+  const token = localStorage.getItem('token');
+
   const fetchAlerts = useCallback(async () => {
     setLoading(true);
     try {
@@ -23,14 +25,31 @@ function Forensics() {
         search: searchTerm
       });
       
-      const response = await fetch(`http://localhost:5000/api/alerts?${params}`);
+      // FIXED: Added Authorization header
+      const response = await fetch(`http://localhost:5000/api/alerts?${params}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          localStorage.clear();
+          window.location.href = '/';
+          return;
+        }
+        throw new Error(`HTTP ${response.status}`);
+      }
+      
       const data = await response.json();
       setAlerts(data.alerts || []);
+      console.log(`✅ Loaded ${data.alerts?.length || 0} alerts for forensics`);
     } catch (error) {
-      console.error('Error fetching alerts:', error);
+      console.error('❌ Forensics error:', error);
     }
     setLoading(false);
-  }, [filters, searchTerm]);
+  }, [filters, searchTerm, token]);
 
   useEffect(() => {
     fetchAlerts();
@@ -59,8 +78,9 @@ function Forensics() {
     <div className="forensics-page">
       {/* Header */}
       <div className="forensics-header">
-        <h1>🔍 Forensics & Search</h1>
-        <button className="export-btn" onClick={fetchAlerts}>
+        <h1>🔍 Forensics & Historical Search</h1>
+        <p className="header-subtitle">Search and analyze security events</p>
+        <button className="refresh-btn" onClick={fetchAlerts}>
           🔄 Refresh
         </button>
       </div>
@@ -75,7 +95,7 @@ function Forensics() {
             onChange={(e) => setSearchTerm(e.target.value)}
             className="search-input"
           />
-          <button type="submit" className="search-btn">Search</button>
+          <button type="submit" className="search-btn">🔍 Search</button>
         </form>
 
         <div className="filters-row">
@@ -97,124 +117,149 @@ function Forensics() {
             className="filter-select"
           >
             <option value="">All Engines</option>
-            <option value="IDS">IDS</option>
-            <option value="Traffic Engine">Traffic Engine</option>
-            <option value="UEBA">UEBA</option>
-            <option value="Artifact Engine">Artifact Engine</option>
+            <option value="IDS">IDS Engine</option>
+            <option value="Traffic">Traffic Engine</option>
+            <option value="UEBA">UEBA Engine</option>
+            <option value="Artifact">Artifact Engine</option>
             <option value="Threat Intelligence">Threat Intelligence</option>
             <option value="CORRELATION BRAIN">Correlation Brain</option>
           </select>
 
           <input
-            type="datetime-local"
+            type="date"
             value={filters.startDate}
             onChange={(e) => handleFilterChange('startDate', e.target.value)}
             className="filter-date"
+            placeholder="Start Date"
           />
 
           <input
-            type="datetime-local"
+            type="date"
             value={filters.endDate}
             onChange={(e) => handleFilterChange('endDate', e.target.value)}
             className="filter-date"
+            placeholder="End Date"
           />
 
-          <button onClick={clearFilters} className="clear-btn">Clear</button>
+          <button onClick={clearFilters} className="clear-btn">
+            ✖ Clear
+          </button>
         </div>
       </div>
 
-      {/* Results */}
-      <div className="forensics-content">
-        {/* Table View */}
-        <div className="table-container">
-          <div className="table-header">
-            <h3>Alert History ({alerts.length} results)</h3>
-          </div>
+      {/* Results Count */}
+      <div className="results-info">
+        <span className="results-count">
+          Found {alerts.length} alert{alerts.length !== 1 ? 's' : ''}
+        </span>
+      </div>
 
-          {loading ? (
-            <div className="loading-state">
-              <div className="spinner"></div>
-              <p>Loading...</p>
-            </div>
-          ) : alerts.length === 0 ? (
-            <div className="empty-state">
-              <p>No alerts found matching your criteria</p>
-            </div>
-          ) : (
-            <table className="forensics-table">
-              <thead>
-                <tr>
-                  <th>Time</th>
-                  <th>Severity</th>
-                  <th>Engine</th>
-                  <th>Alert Type</th>
-                  <th>Entity</th>
-                  <th>Actions</th>
+      {/* Results Table */}
+      {loading ? (
+        <div className="loading-state">
+          <div className="spinner"></div>
+          <p>Searching...</p>
+        </div>
+      ) : alerts.length === 0 ? (
+        <div className="empty-state">
+          <p>🔍 No alerts found</p>
+          <p className="empty-hint">Try adjusting your search criteria</p>
+        </div>
+      ) : (
+        <div className="forensics-table-container">
+          <table className="forensics-table">
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>Severity</th>
+                <th>Engine</th>
+                <th>Alert Type</th>
+                <th>Target</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {alerts.map((alert) => (
+                <tr key={alert._id} className={`severity-${alert.severity?.toLowerCase()}`}>
+                  <td className="timestamp-cell">
+                    {new Date(alert.timestamp).toLocaleString()}
+                  </td>
+                  <td>
+                    <span className={`severity-badge severity-${alert.severity?.toLowerCase()}`}>
+                      {alert.severity}
+                    </span>
+                  </td>
+                  <td className="engine-cell">{alert.engine}</td>
+                  <td className="alert-type-cell">{alert.alertType}</td>
+                  <td className="target-cell">
+                    {alert.details?.ip_address || alert.details?.target_entity || alert.details?.source_ip || '-'}
+                  </td>
+                  <td>
+                    <span className={`status-badge status-${(alert.status || 'New').toLowerCase().replace(' ', '-')}`}>
+                      {alert.status || 'New'}
+                    </span>
+                  </td>
+                  <td>
+                    <button 
+                      className="view-btn"
+                      onClick={() => setSelectedAlert(alert)}
+                    >
+                      👁️ View
+                    </button>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {alerts.map((alert, idx) => (
-                  <tr
-                    key={alert._id || idx}
-                    className={`severity-row-${alert.severity?.toLowerCase()}`}
-                    onClick={() => setSelectedAlert(alert)}
-                  >
-                    <td>{new Date(alert.timestamp).toLocaleString()}</td>
-                    <td>
-                      <span className={`severity-badge severity-${alert.severity?.toLowerCase()}`}>
-                        {alert.severity}
-                      </span>
-                    </td>
-                    <td>{alert.engine}</td>
-                    <td>{alert.alertType}</td>
-                    <td>
-                      {alert.details?.ip_address || 
-                       alert.details?.source_ip || 
-                       alert.details?.user_id || 
-                       alert.details?.target_entity || 
-                       '-'}
-                    </td>
-                    <td>
-                      <button className="view-btn">View</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+              ))}
+            </tbody>
+          </table>
         </div>
-      </div>
+      )}
 
       {/* Detail Modal */}
       {selectedAlert && (
         <div className="modal-overlay" onClick={() => setSelectedAlert(null)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-content forensics-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h2>Alert Details</h2>
               <button className="modal-close" onClick={() => setSelectedAlert(null)}>×</button>
             </div>
+
             <div className="modal-body">
-              <div className="detail-row">
-                <span className="detail-label">Engine:</span>
-                <span className="detail-value">{selectedAlert.engine}</span>
+              <div className="detail-section">
+                <h3>Basic Information</h3>
+                <div className="detail-grid">
+                  <div className="detail-row">
+                    <span className="detail-label">Engine:</span>
+                    <span className="detail-value">{selectedAlert.engine}</span>
+                  </div>
+                  <div className="detail-row">
+                    <span className="detail-label">Alert Type:</span>
+                    <span className="detail-value">{selectedAlert.alertType}</span>
+                  </div>
+                  <div className="detail-row">
+                    <span className="detail-label">Severity:</span>
+                    <span className={`severity-badge severity-${selectedAlert.severity?.toLowerCase()}`}>
+                      {selectedAlert.severity}
+                    </span>
+                  </div>
+                  <div className="detail-row">
+                    <span className="detail-label">Timestamp:</span>
+                    <span className="detail-value">{new Date(selectedAlert.timestamp).toLocaleString()}</span>
+                  </div>
+                  <div className="detail-row">
+                    <span className="detail-label">Status:</span>
+                    <span className={`status-badge status-${(selectedAlert.status || 'New').toLowerCase().replace(' ', '-')}`}>
+                      {selectedAlert.status || 'New'}
+                    </span>
+                  </div>
+                </div>
               </div>
-              <div className="detail-row">
-                <span className="detail-label">Type:</span>
-                <span className="detail-value">{selectedAlert.alertType}</span>
-              </div>
-              <div className="detail-row">
-                <span className="detail-label">Severity:</span>
-                <span className={`severity-badge severity-${selectedAlert.severity?.toLowerCase()}`}>
-                  {selectedAlert.severity}
-                </span>
-              </div>
-              <div className="detail-row">
-                <span className="detail-label">Timestamp:</span>
-                <span className="detail-value">{new Date(selectedAlert.timestamp).toLocaleString()}</span>
-              </div>
-              <div className="detail-row full-width">
-                <span className="detail-label">Details:</span>
-                <pre className="detail-json">{JSON.stringify(selectedAlert.details, null, 2)}</pre>
+
+              <div className="detail-section">
+                <h3>Technical Details</h3>
+                <div className="json-details">
+                  <pre>{JSON.stringify(selectedAlert.details, null, 2)}</pre>
+                </div>
               </div>
             </div>
           </div>

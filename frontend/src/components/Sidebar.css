@@ -318,3 +318,81 @@
     display: none;
   }
 }
+/* Change Password Modal */
+.change-password-modal {
+  max-width: 500px;
+}
+
+.password-change-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.password-change-form .form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.password-change-form label {
+  font-size: 14px;
+  font-weight: 700;
+  color: #e8eaed;
+}
+
+.password-change-form input {
+  padding: 12px 16px;
+  background: #252b3b;
+  border: 1px solid #2d3748;
+  border-radius: 8px;
+  color: #e8eaed;
+  font-size: 14px;
+}
+
+.password-change-form input:focus {
+  outline: none;
+  border-color: #00bcd4;
+  box-shadow: 0 0 0 3px rgba(0, 188, 212, 0.1);
+}
+
+.password-change-form .form-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.nav-button {
+  background: transparent;
+  border: none;
+  width: 100%;
+  text-align: left;
+}
+
+/* Master Reset Button */
+.header-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.btn-master-reset {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  background: linear-gradient(135deg, #ff4444, #cc0000);
+  border: none;
+  border-radius: 10px;
+  color: white;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(255, 68, 68, 0.3);
+}
+
+.btn-master-reset:hover {
+  background: linear-gradient(135deg, #ff6b6b, #ff4444);
+  transform: translateY(-2px);
+}

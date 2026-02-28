@@ -1,9 +1,9 @@
-// src/components/Sidebar.js - COMPLETE with Senior Dashboard
+// src/components/Sidebar.js - UPDATED with Change Password Option
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   Shield, LayoutDashboard, Activity, AlertOctagon, 
-  Search, Users, User, Power, Target
+  Search, Users, User, Power, Target, Key
 } from 'lucide-react';
 import './Sidebar.css';
 
@@ -13,11 +13,59 @@ const Sidebar = ({ isConnected }) => {
   const role = localStorage.getItem('role');
   const username = localStorage.getItem('username');
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: ''
+  });
+  const [error, setError] = useState('');
 
   const handleLogout = () => {
     localStorage.clear();
     navigate('/login');
     window.location.reload();
+  };
+
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    setError('');
+
+    if (passwordForm.newPassword.length < 8) {
+      setError('Password must be at least 8 characters');
+      return;
+    }
+
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:5000/api/auth/change-password', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          currentPassword: passwordForm.currentPassword,
+          newPassword: passwordForm.newPassword
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        alert('✅ Password changed successfully! Please login with your new password.');
+        handleLogout();
+      } else {
+        setError(data.error || 'Failed to change password');
+      }
+    } catch (error) {
+      setError('Network error. Please try again.');
+    }
   };
 
   const isActive = (path) => {
@@ -121,9 +169,19 @@ const Sidebar = ({ isConnected }) => {
             </Link>
           </>
         )}
+
+        {/* Change Password - NEW! Available to ALL roles */}
+        <div className="nav-section-title">ACCOUNT</div>
+        <button 
+          className="nav-item nav-button"
+          onClick={() => setShowChangePassword(true)}
+        >
+          <Key size={20} />
+          <span>Change Password</span>
+        </button>
       </nav>
 
-      {/* Sign Out Button - IMPROVED */}
+      {/* Sign Out Button */}
       <div className="sidebar-footer">
         {!showLogoutConfirm ? (
           <button className="signout-btn" onClick={() => setShowLogoutConfirm(true)}>
@@ -144,6 +202,69 @@ const Sidebar = ({ isConnected }) => {
           </div>
         )}
       </div>
+
+      {/* Change Password Modal - NEW! */}
+      {showChangePassword && (
+        <div className="modal-overlay" onClick={() => setShowChangePassword(false)}>
+          <div className="modal-content change-password-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Change Password</h2>
+              <button className="modal-close" onClick={() => setShowChangePassword(false)}>×</button>
+            </div>
+
+            <div className="modal-body">
+              {error && (
+                <div className="error-message">
+                  {error}
+                </div>
+              )}
+
+              <form onSubmit={handleChangePassword} className="password-change-form">
+                <div className="form-group">
+                  <label>Current Password:</label>
+                  <input
+                    type="password"
+                    value={passwordForm.currentPassword}
+                    onChange={(e) => setPasswordForm({...passwordForm, currentPassword: e.target.value})}
+                    required
+                    autoFocus
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>New Password:</label>
+                  <input
+                    type="password"
+                    value={passwordForm.newPassword}
+                    onChange={(e) => setPasswordForm({...passwordForm, newPassword: e.target.value})}
+                    required
+                    placeholder="At least 8 characters"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Confirm New Password:</label>
+                  <input
+                    type="password"
+                    value={passwordForm.confirmPassword}
+                    onChange={(e) => setPasswordForm({...passwordForm, confirmPassword: e.target.value})}
+                    required
+                  />
+                </div>
+
+                <div className="form-actions">
+                  <button type="button" className="btn-cancel" onClick={() => setShowChangePassword(false)}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn-submit">
+                    Change Password
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
     </aside>
   );
 };

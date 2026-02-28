@@ -1,5 +1,6 @@
-// src/pages/Login.js - Enhanced Login with RBAC
+// src/pages/Login.js
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Shield, User, Lock, AlertCircle } from 'lucide-react';
 import './Login.css';
 
@@ -26,23 +27,34 @@ const Login = ({ onLogin }) => {
       const data = await response.json();
 
       if (response.ok) {
-        // Store authentication data
+        // Store standard authentication data
         localStorage.setItem('token', data.token);
         localStorage.setItem('role', data.user.role);
         localStorage.setItem('username', data.user.username);
         localStorage.setItem('fullName', data.user.fullName || data.user.username);
         localStorage.setItem('assigned_ip', data.user.assigned_ip || '');
 
+        // --- AI UPDATE START ---
+        // Store mustChangePassword
+        const mustChange = data.mustChangePassword || false;
+        const reason = data.passwordChangeReason || 'temporary';
+
+        localStorage.setItem('mustChangePassword', mustChange ? 'true' : 'false');
+        localStorage.setItem('passwordChangeReason', reason);
+
+        // Call parent callback (setToken/onLogin) with new params
+        if (onLogin) {
+            onLogin(data.token, data.user.role, mustChange, reason);
+        }
+        // --- AI UPDATE END ---
+
         console.log('✅ Login successful:', data.user.role);
 
-        // Call parent callback
-        if (onLogin) {
-          onLogin();
-        }
-
-        // Redirect based on role
+        // Redirect based on role and password status
         setTimeout(() => {
-          if (data.user.role === 'admin') {
+          if (mustChange) {
+            window.location.href = '/change-password';
+          } else if (data.user.role === 'admin') {
             window.location.href = '/admin-dashboard';
           } else if (data.user.role === 'senior') {
             window.location.href = '/dashboard';
@@ -52,6 +64,7 @@ const Login = ({ onLogin }) => {
             window.location.href = '/';
           }
         }, 100);
+
       } else {
         setError(data.error || 'Login failed');
       }
@@ -153,6 +166,12 @@ const Login = ({ onLogin }) => {
                 )}
               </button>
             </form>
+
+            <div className="login-footer">
+              <Link to="/request-password-reset" className="forgot-password-link">
+                Forgot your password?
+              </Link>
+            </div>
 
             <div className="login-info">
               <div className="info-box">

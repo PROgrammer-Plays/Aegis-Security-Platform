@@ -1,20 +1,19 @@
-// src/pages/PasswordReset.js - Reset Password with Token Component
+// src/components/ChangePasswordModal.js - Force Password Change on First Login
 import React, { useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Shield, Lock, Eye, EyeOff, Check, X } from 'lucide-react';
-import './PasswordReset.css';
+import { Lock, Eye, EyeOff, Check, X, AlertTriangle } from 'lucide-react';
+import './ChangePasswordModal.css';
 
-const PasswordReset = () => {
-  const { token } = useParams();
-  const navigate = useNavigate();
-  
+const ChangePasswordModal = ({ reason, onPasswordChanged }) => {
+  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
+  const [showCurrent, setShowCurrent] = useState(false);
+  const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState(false);
+
+  const token = localStorage.getItem('token');
 
   // Password strength validation
   const getPasswordStrength = (password) => {
@@ -54,21 +53,27 @@ const PasswordReset = () => {
     setLoading(true);
 
     try {
-      const response = await fetch('http://localhost:5000/api/auth/reset-password', {
+      const response = await fetch('http://localhost:5000/api/auth/change-password', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, newPassword })
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ 
+          currentPassword, 
+          newPassword 
+        })
       });
 
       const data = await response.json();
 
       if (response.ok) {
-        setSuccess(true);
-        setTimeout(() => {
-          navigate('/login');
-        }, 3000);
+        // Success - logout and redirect to login
+        alert('✅ Password changed successfully! Please login with your new password.');
+        localStorage.clear();
+        onPasswordChanged();
       } else {
-        setError(data.error || 'Password reset failed');
+        setError(data.error || 'Failed to change password');
       }
     } catch (error) {
       setError('Network error. Please try again.');
@@ -77,43 +82,23 @@ const PasswordReset = () => {
     setLoading(false);
   };
 
-  if (success) {
-    return (
-      <div className="password-reset-page">
-        <div className="reset-card success-card">
-          <div className="success-icon check">
-            <Check size={64} />
-          </div>
-          
-          <h1>Password Reset Successful!</h1>
-          <p className="success-message">
-            Your password has been reset successfully. You can now login with your new password.
-          </p>
-          
-          <div className="redirect-message">
-            Redirecting to login page in 3 seconds...
-          </div>
-          
-          <Link to="/login" className="login-btn">
-            Go to Login Now
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="password-reset-page">
-      <div className="reset-card">
-        <div className="brand-header">
-          <Shield size={48} color="#00bcd4" />
-          <h1>AEGIS</h1>
+    <div className="force-change-overlay">
+      <div className="force-change-modal">
+        {/* Warning Header */}
+        <div className="warning-header">
+          <AlertTriangle size={64} color="#ff8800" />
+          <h1>Password Change Required</h1>
+          {reason && (
+            <div className="reason-box">
+              <strong>Reason:</strong> {reason}
+            </div>
+          )}
+          <p className="warning-text">
+            You must change your password before accessing the dashboard.
+            {reason === 'temporary' && ' Your current password is temporary and expires in 24 hours.'}
+          </p>
         </div>
-
-        <h2>Reset Your Password</h2>
-        <p className="subtitle">
-          Enter your new password below. Make it strong and memorable!
-        </p>
 
         {error && (
           <div className="error-message">
@@ -122,7 +107,33 @@ const PasswordReset = () => {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="reset-form">
+        <form onSubmit={handleSubmit} className="change-password-form">
+          {/* Current Password */}
+          <div className="form-group">
+            <label htmlFor="currentPassword">
+              <Lock size={20} />
+              Current Password
+            </label>
+            <div className="password-input-wrapper">
+              <input
+                id="currentPassword"
+                type={showCurrent ? 'text' : 'password'}
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                placeholder="Enter your temporary password"
+                required
+                autoFocus
+              />
+              <button
+                type="button"
+                className="toggle-password"
+                onClick={() => setShowCurrent(!showCurrent)}
+              >
+                {showCurrent ? <EyeOff size={20} /> : <Eye size={20} />}
+              </button>
+            </div>
+          </div>
+
           {/* New Password */}
           <div className="form-group">
             <label htmlFor="newPassword">
@@ -132,23 +143,22 @@ const PasswordReset = () => {
             <div className="password-input-wrapper">
               <input
                 id="newPassword"
-                type={showPassword ? 'text' : 'password'}
+                type={showNew ? 'text' : 'password'}
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 placeholder="At least 8 characters"
                 required
-                autoFocus
               />
               <button
                 type="button"
                 className="toggle-password"
-                onClick={() => setShowPassword(!showPassword)}
+                onClick={() => setShowNew(!showNew)}
               >
-                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                {showNew ? <EyeOff size={20} /> : <Eye size={20} />}
               </button>
             </div>
 
-            {/* Password Strength Indicator */}
+            {/* Password Strength */}
             {newPassword && (
               <div className="password-strength">
                 <div className="strength-bar">
@@ -174,7 +184,7 @@ const PasswordReset = () => {
           <div className="form-group">
             <label htmlFor="confirmPassword">
               <Lock size={20} />
-              Confirm Password
+              Confirm New Password
             </label>
             <div className="password-input-wrapper">
               <input
@@ -182,7 +192,7 @@ const PasswordReset = () => {
                 type={showConfirm ? 'text' : 'password'}
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Re-enter password"
+                placeholder="Re-enter new password"
                 required
               />
               <button
@@ -212,7 +222,7 @@ const PasswordReset = () => {
             )}
           </div>
 
-          {/* Password Requirements */}
+          {/* Requirements */}
           <div className="password-requirements">
             <h4>Password Requirements:</h4>
             <ul>
@@ -231,6 +241,19 @@ const PasswordReset = () => {
             </ul>
           </div>
 
+          {/* Security Tips */}
+          {reason === 'master_reset' && (
+            <div className="security-tips">
+              <h4>⚠️ Important Security Tips:</h4>
+              <ul>
+                <li>Choose a strong, unique password you haven't used before</li>
+                <li>Don't share your password with anyone, including IT staff</li>
+                <li>This reset was done to protect your account security</li>
+                <li>Contact your administrator if you have questions</li>
+              </ul>
+            </div>
+          )}
+
           <button 
             type="submit" 
             className="submit-btn"
@@ -239,22 +262,20 @@ const PasswordReset = () => {
             {loading ? (
               <>
                 <div className="btn-spinner"></div>
-                Resetting...
+                Changing Password...
               </>
             ) : (
-              'Reset Password'
+              'Change Password & Logout'
             )}
           </button>
         </form>
 
-        <div className="form-footer">
-          <Link to="/login" className="back-link">
-            Back to Login
-          </Link>
+        <div className="cannot-skip">
+          🔒 You cannot skip this step. Contact your administrator if you need help.
         </div>
       </div>
     </div>
   );
 };
 
-export default PasswordReset;
+export default ChangePasswordModal;
