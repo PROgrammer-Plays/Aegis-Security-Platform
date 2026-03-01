@@ -22,8 +22,19 @@ const adminRoutes = require('./routes/admin.routes');
 const app = express();
 const server = http.createServer(app);
 
+// ===== CORS CONFIGURATION (UPDATED) =====
+// We create a list of allowed origins including Localhost, your Render Frontend, and the Config value.
+const allowedOrigins = [
+    "http://localhost:3000",
+    "https://aegis-frontend-tud6.onrender.com", // <--- ADDED YOUR LIVE SITE
+    CORS_ORIGIN // Include value from config/constants.js
+].filter(Boolean); // Remove null/undefined values
+
 // Middleware
-app.use(cors({ origin: CORS_ORIGIN }));
+app.use(cors({
+    origin: allowedOrigins,
+    credentials: true
+}));
 app.use(express.json());
 
 // Request logging
@@ -73,6 +84,7 @@ const startServer = async () => {
         await createDefaultAdmin();
         
         // Initialize WebSocket
+        // Note: Make sure socket.service.js also uses 'allowedOrigins' or the CORS_ORIGIN env var!
         initializeSocket(server);
         
         // Start server
@@ -84,7 +96,7 @@ const startServer = async () => {
             console.log(`🚀 Server running on port: ${PORT}`);
             console.log(`🌐 API: http://localhost:${PORT}`);
             console.log(`📡 WebSocket ready`);
-            console.log(`🔒 CORS origin: ${CORS_ORIGIN}`);
+            console.log(`🔒 Allowed Origins:`, allowedOrigins);
             console.log('═══════════════════════════════════════════');
             console.log('');
         });
