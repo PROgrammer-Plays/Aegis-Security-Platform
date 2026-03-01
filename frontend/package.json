@@ -4,6 +4,7 @@
   "description": "Frontend React app for AI-based security monitoring system",
   "private": true,
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "lucide-react": "^0.562.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
@@ -36,5 +37,12 @@
       "last 1 safari version"
     ]
   },
-  "proxy": "http://localhost:5000"
+  "main": "index.js",
+  "devDependencies": {
+    "jest": "^27.5.1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs"
 }
