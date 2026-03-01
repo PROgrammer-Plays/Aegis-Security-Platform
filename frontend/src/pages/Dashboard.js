@@ -1,5 +1,6 @@
 // src/pages/Dashboard.js - FIXED with proper authentication
 import React, { useEffect, useState, useCallback } from 'react';
+const API_BASE = process.env.REACT_APP_BACKEND_URL || "http://localhost:5000";// Ensure this is set in your .env file
 import { 
   PieChart, Pie, Cell, 
   BarChart, Bar, 
@@ -37,7 +38,7 @@ const Dashboard = () => {
       console.log('📊 Fetching dashboard stats...');
       
       // FIXED: Added Authorization header
-      const response = await fetch(`http://localhost:5000/api/stats?hours=${timeRange}`, {
+      const response = await fetch(`${API_BASE}/api/stats?hours=${timeRange}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
