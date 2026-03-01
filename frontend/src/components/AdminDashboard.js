@@ -33,7 +33,7 @@ const AdminDashboard = () => {
             console.log('🔍 Fetching admin dashboard data...');
             
             // Fetch stats
-            const statsRes = await fetch('http://localhost:5000/api/stats', {
+            const statsRes = await fetch((process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000') + '/api/stats', {
                 headers: { 
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
@@ -55,7 +55,7 @@ const AdminDashboard = () => {
             });
 
             // Fetch war room data
-            const warRoomRes = await fetch('http://localhost:5000/api/stats/war-room', {
+            const warRoomRes = await fetch((process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000') + '/api/stats/war-room', {
                 headers: { 
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'

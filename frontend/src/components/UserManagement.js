@@ -52,7 +52,7 @@ const UserManagement = () => {
             setLoading(true);
 
             // Fetch users
-            const usersRes = await fetch('http://localhost:5000/api/admin/users', {
+            const usersRes = await fetch((process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000') + '/api/admin/users', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (usersRes.ok) {
@@ -61,7 +61,7 @@ const UserManagement = () => {
             }
 
             // Fetch custom roles
-            const rolesRes = await fetch('http://localhost:5000/api/admin/custom-roles', {
+            const rolesRes = await fetch((process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000') + '/api/admin/custom-roles', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (rolesRes.ok) {
@@ -70,7 +70,7 @@ const UserManagement = () => {
             }
 
             // Fetch unlock requests
-            const unlockRes = await fetch('http://localhost:5000/api/admin/unlock-requests', {
+            const unlockRes = await fetch((process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000') + '/api/admin/unlock-requests', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (unlockRes.ok) {
@@ -79,7 +79,7 @@ const UserManagement = () => {
             }
 
             // Fetch password reset requests
-            const resetRes = await fetch('http://localhost:5000/api/admin/password-reset-requests', {
+            const resetRes = await fetch((process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000') + '/api/admin/password-reset-requests', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (resetRes.ok) {
@@ -199,7 +199,7 @@ const UserManagement = () => {
         e.preventDefault();
 
         try {
-            const res = await fetch('http://localhost:5000/api/admin/users', {
+            const res = await fetch((process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000') + '/api/admin/users', {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,

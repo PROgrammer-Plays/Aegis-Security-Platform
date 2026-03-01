@@ -20,7 +20,7 @@ const OpsDashboard = () => {
             setLoading(true);
             setError('');
 
-            const res = await fetch('http://localhost:5000/api/stats', {
+            const res = await fetch((process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000') + '/api/stats', {
                 headers: {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'

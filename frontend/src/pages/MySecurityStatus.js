@@ -13,14 +13,14 @@ const MySecurityStatus = () => {
   const fetchMyAlerts = useCallback(async () => {
     try {
       // Fetch user profile
-      const profileRes = await fetch('http://localhost:5000/api/auth/profile', {
+      const profileRes = await fetch((process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000') + '/api/auth/profile', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const profileData = await profileRes.json();
       setUser(profileData.user);
       
       // Fetch my alerts (backend filters by assigned_ip)
-      const alertsRes = await fetch('http://localhost:5000/api/alerts?limit=50', {
+      const alertsRes = await fetch((process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000') + '/api/alerts?limit=50', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const alertsData = await alertsRes.json();

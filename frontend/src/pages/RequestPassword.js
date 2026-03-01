@@ -11,7 +11,7 @@ const RequestPasswordReset = () => {
     setLoading(true);
     
     try {
-      await fetch('http://localhost:5000/api/auth/request-password-reset', {
+      await fetch((process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000') + '/api/auth/request-password-reset', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email })

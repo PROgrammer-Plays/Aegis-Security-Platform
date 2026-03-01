@@ -27,7 +27,7 @@ const Incidents = () => {
     try {
       console.log('🔍 Fetching incidents...');
       
-      const response = await fetch('http://localhost:5000/api/alerts?limit=200', {
+      const response = await fetch((process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000') + '/api/alerts?limit=200', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'

@@ -23,7 +23,7 @@ const SeniorDashboard = () => {
   const fetchDashboardData = useCallback(async () => {
     try {
       // Fetch my assigned alerts
-      const assignedRes = await fetch('http://localhost:5000/api/alerts?limit=50', {
+      const assignedRes = await fetch((process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000') + '/api/alerts?limit=50', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const assignedData = await assignedRes.json();

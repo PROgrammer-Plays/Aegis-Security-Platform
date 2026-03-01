@@ -44,7 +44,7 @@ const LiveFeed = () => {
   const fetchAlerts = async () => {
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:5000/api/alerts?limit=100', {
+      const response = await fetch((process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000') + '/api/alerts?limit=100', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await response.json();

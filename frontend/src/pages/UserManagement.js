@@ -32,7 +32,7 @@ const UserManagement = () => {
 
   const fetchUsers = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/admin/users', {
+      const response = await fetch((process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000') + '/api/admin/users', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await response.json();
@@ -67,7 +67,7 @@ const UserManagement = () => {
           alert(`❌ Error: ${error.error}`);
         }
       } else {
-        const response = await fetch('http://localhost:5000/api/admin/users', {
+        const response = await fetch((process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000') + '/api/admin/users', {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -208,7 +208,7 @@ const UserManagement = () => {
     }
 
     try {
-      const response = await fetch('http://localhost:5000/api/admin/master-reset-passwords', {
+      const response = await fetch((process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000') + '/api/admin/master-reset-passwords', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

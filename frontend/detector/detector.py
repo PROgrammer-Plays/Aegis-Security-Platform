@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 # === CONFIGURATION ===
 class Config:
-    BACKEND_API_URL = os.getenv("BACKEND_API_URL", "http://localhost:5000/api/alerts")
+    BACKEND_API_URL = os.getenv("BACKEND_API_URL", "https://aegis-backend-gza7.onrender.com/api/alerts")
     IPQS_API_KEY = os.getenv("IPQS_API_KEY")
     VIRUSTOTAL_API_KEY = os.getenv("VIRUSTOTAL_API_KEY")
     

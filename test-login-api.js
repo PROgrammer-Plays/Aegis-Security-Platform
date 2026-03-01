@@ -2,7 +2,7 @@
 require('dotenv').config();
 const axios = require('axios');
 
-const API_URL = 'http://localhost:5000';
+const API_URL = process.env.BACKEND_API_URL;
 
 async function testLogin() {
     console.log('🧪 Testing Login API Directly');
