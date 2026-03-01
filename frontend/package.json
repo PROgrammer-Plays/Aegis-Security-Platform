@@ -3,7 +3,6 @@
   "version": "1.0.0",
   "description": "Frontend React app for AI-based security monitoring system",
   "private": true,
-  "homepage": ".",
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
     "lucide-react": "^0.562.0",
