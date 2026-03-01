@@ -38,7 +38,6 @@
     "type": "git",
     "url": "git+https://github.com/PROgrammer-Plays/Aegis-Security-Platform.git"
   },
-  "type": "commonjs",
   "bugs": {
     "url": "https://github.com/PROgrammer-Plays/Aegis-Security-Platform/issues"
   },
