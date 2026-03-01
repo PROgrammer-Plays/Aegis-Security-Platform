@@ -1,10 +1,10 @@
-// src/pages/Incidents.js - The ULTIMATE War Room (AI + Cascade Resolution)
+// src/pages/Incidents.js - War Room with WORKING AI Analyst
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
   CheckCircle, AlertOctagon, Clock, Activity, 
   XCircle, Target, Zap, Shield, AlertTriangle, Brain
 } from 'lucide-react';
-import AIAnalyst from '../components/AIAnalyst';
+import AlertAIAnalyst from '../components/AlertAIAnalyst'; // UPDATED IMPORT
 import './Incidents.css';
 
 const STATUS_OPTIONS = ['New', 'In Progress', 'Resolved', 'False Positive'];
@@ -12,7 +12,7 @@ const STATUS_OPTIONS = ['New', 'In Progress', 'Resolved', 'False Positive'];
 const Incidents = () => {
   const [incidents, setIncidents] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('all'); // 'all' = Correlation only, 'active' = Engine alerts, 'resolved' = All resolved
+  const [filter, setFilter] = useState('all');
   const [selectedIncident, setSelectedIncident] = useState(null);
   const [confirmDialog, setConfirmDialog] = useState(null);
   
@@ -23,11 +23,8 @@ const Incidents = () => {
 
   const token = localStorage.getItem('token');
 
-  // Fetch incidents from backend
   const fetchIncidents = useCallback(async () => {
     try {
-      // Don't show loading spinner on refresh to keep UI stable
-      // setLoading(true); 
       console.log('🔍 Fetching incidents...');
       
       const response = await fetch('http://localhost:5000/api/alerts?limit=200', {
@@ -39,8 +36,6 @@ const Incidents = () => {
 
       if (!response.ok) {
         if (response.status === 401) {
-          // localStorage.clear(); // Commented out to prevent aggressive logout
-          // window.location.href = '/';
           return;
         }
         throw new Error(`HTTP ${response.status}`);
@@ -55,7 +50,6 @@ const Incidents = () => {
       );
       
       filtered.sort((a, b) => {
-        // Priority sort: Correlation -> Critical -> Timestamp
         if (a.engine === 'CORRELATION BRAIN' && b.engine !== 'CORRELATION BRAIN') return -1;
         if (a.engine !== 'CORRELATION BRAIN' && b.engine === 'CORRELATION BRAIN') return 1;
         if (a.severity === 'Critical' && b.severity !== 'Critical') return -1;
@@ -72,11 +66,10 @@ const Incidents = () => {
 
   useEffect(() => {
     fetchIncidents();
-    const interval = setInterval(fetchIncidents, 15000); // Auto-refresh every 15s
+    const interval = setInterval(fetchIncidents, 15000);
     return () => clearInterval(interval);
   }, [fetchIncidents]);
 
-  // Find related engine alerts for a correlation incident
   const findRelatedAlerts = (correlationIncident) => {
     if (correlationIncident.engine !== 'CORRELATION BRAIN') return [];
     
@@ -91,13 +84,11 @@ const Incidents = () => {
     );
   };
 
-  // Main status update function
   const updateStatus = async (id, newStatus, skipConfirm = false) => {
     try {
       const incident = incidents.find(inc => inc._id === id);
       if (!incident) return;
 
-      // Check for Cascade Resolution Opportunity
       if (incident.engine === 'CORRELATION BRAIN' && 
           (newStatus === 'Resolved' || newStatus === 'False Positive') &&
           !skipConfirm) {
@@ -116,10 +107,7 @@ const Incidents = () => {
       }
 
       await performUpdate(id, newStatus);
-      
-      // OPTIONAL: Implement Cascade-Up logic here if needed (Alert -> Incident)
-      
-      await fetchIncidents(); // Refresh UI
+      await fetchIncidents();
     } catch (error) {
       console.error('❌ Update failed:', error);
     }
@@ -163,28 +151,26 @@ const Incidents = () => {
 
   // --- AI ANALYST HANDLER ---
   const handleOpenAI = (e, alert) => {
-    e.stopPropagation(); // Prevent card click
+    e.stopPropagation();
     setAIAnalystAlert(alert);
     setShowAIAnalyst(true);
     setIsAIMinimized(false);
   };
 
-  // SMART FILTERING logic
   const filteredIncidents = incidents.filter(incident => {
     const status = incident.status || 'New';
     
     switch(filter) {
-      case 'all': // Correlation Only (Main View)
+      case 'all':
         return incident.engine === 'CORRELATION BRAIN' && status !== 'Resolved' && status !== 'False Positive';
-      case 'active': // Raw Engine Alerts
+      case 'active':
         return incident.engine !== 'CORRELATION BRAIN' && status !== 'Resolved' && status !== 'False Positive';
-      case 'resolved': // History
+      case 'resolved':
         return status === 'Resolved' || status === 'False Positive';
       default: return true;
     }
   });
 
-  // Count Stats
   const correlationCount = incidents.filter(i => i.engine === 'CORRELATION BRAIN' && i.status !== 'Resolved' && i.status !== 'False Positive').length;
   const activeCount = incidents.filter(i => i.engine !== 'CORRELATION BRAIN' && i.status !== 'Resolved' && i.status !== 'False Positive').length;
   const resolvedCount = incidents.filter(i => i.status === 'Resolved' || i.status === 'False Positive').length;
@@ -210,65 +196,33 @@ const Incidents = () => {
 
   return (
     <div className="incidents-page">
-      {/* Header */}
-      <header className="incidents-header">
-        <div className="header-content">
-          <div className="header-title">
-            <AlertOctagon size={32} color="#ff4444" />
-            <div>
-              <h1>Incident War Room</h1>
-              <p>Manage, Analyze, and Resolve High-Priority Threats</p>
-            </div>
-          </div>
-          <button className="refresh-btn" onClick={fetchIncidents}>🔄 Refresh</button>
+      <div className="incidents-header">
+        <div>
+          <h1>🚨 War Room</h1>
+          <p>Critical Incident Response & Management</p>
         </div>
-      </header>
-
-      {/* Stats Cards */}
-      <div className="incidents-stats">
-        <div className="stat-card">
-          <div className="stat-icon info"><Zap size={24} /></div>
-          <div className="stat-content">
-            <div className="stat-value">{correlationCount}</div>
-            <div className="stat-label">Active Incidents</div>
+        <div className="war-room-stats">
+          <div className={`stat-badge ${filter === 'all' ? 'active' : ''}`} onClick={() => setFilter('all')}>
+            <span className="stat-number">{correlationCount}</span>
+            <span className="stat-label">Incidents</span>
           </div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-icon warning"><Activity size={24} /></div>
-          <div className="stat-content">
-            <div className="stat-value">{activeCount}</div>
-            <div className="stat-label">Raw Alerts</div>
+          <div className={`stat-badge ${filter === 'active' ? 'active' : ''}`} onClick={() => setFilter('active')}>
+            <span className="stat-number">{activeCount}</span>
+            <span className="stat-label">Active Alerts</span>
           </div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-icon success"><CheckCircle size={24} /></div>
-          <div className="stat-content">
-            <div className="stat-value">{resolvedCount}</div>
-            <div className="stat-label">Resolved</div>
+          <div className={`stat-badge ${filter === 'resolved' ? 'active' : ''}`} onClick={() => setFilter('resolved')}>
+            <span className="stat-number">{resolvedCount}</span>
+            <span className="stat-label">Resolved</span>
           </div>
         </div>
       </div>
 
-      {/* Filter Tabs */}
-      <div className="filter-tabs">
-        <button className={filter === 'all' ? 'active' : ''} onClick={() => setFilter('all')}>
-          ⚡ Correlated Incidents ({correlationCount})
-        </button>
-        <button className={filter === 'active' ? 'active' : ''} onClick={() => setFilter('active')}>
-          🛡️ Raw Alerts ({activeCount})
-        </button>
-        <button className={filter === 'resolved' ? 'active' : ''} onClick={() => setFilter('resolved')}>
-          ✅ History ({resolvedCount})
-        </button>
-      </div>
-
-      {/* Main Grid */}
-      <div className="incidents-grid">
+      <div className="incidents-list">
         {filteredIncidents.length === 0 ? (
           <div className="empty-state">
             <CheckCircle size={64} color="#00C851" />
-            <h3>All Systems Operational</h3>
-            <p>{filter === 'resolved' ? 'No history available.' : 'No active threats detected.'}</p>
+            <h2>All Clear!</h2>
+            <p>No active incidents matching your filter.</p>
           </div>
         ) : (
           filteredIncidents.map(incident => (
@@ -277,7 +231,7 @@ const Incidents = () => {
               incident={incident}
               onStatusUpdate={updateStatus}
               onViewDetails={() => setSelectedIncident(incident)}
-              onOpenAI={handleOpenAI} // Passing the AI handler down
+              onOpenAI={handleOpenAI}
               getStatusColor={getStatusColor}
               getIncidentIcon={getIncidentIcon}
               relatedCount={incident.engine === 'CORRELATION BRAIN' ? findRelatedAlerts(incident).length : 0}
@@ -286,7 +240,7 @@ const Incidents = () => {
         )}
       </div>
 
-      {/* --- CONFIRMATION MODAL (Cascade) --- */}
+      {/* Confirmation Modal */}
       {confirmDialog && (
         <div className="modal-overlay" onClick={() => setConfirmDialog(null)}>
           <div className="modal-content confirmation-modal" onClick={(e) => e.stopPropagation()}>
@@ -318,7 +272,7 @@ const Incidents = () => {
         </div>
       )}
 
-      {/* --- INCIDENT DETAIL MODAL --- */}
+      {/* Incident Detail Modal */}
       {selectedIncident && (
         <IncidentDetailModal
           incident={selectedIncident}
@@ -330,9 +284,9 @@ const Incidents = () => {
         />
       )}
 
-      {/* --- AI ANALYST FLOATING PANEL --- */}
+      {/* AI ANALYST PANEL - UPDATED */}
       {showAIAnalyst && aiAnalystAlert && (
-        <AIAnalyst
+        <AlertAIAnalyst
           alert={aiAnalystAlert}
           onClose={() => setShowAIAnalyst(false)}
           isMinimized={isAIMinimized}
@@ -385,7 +339,6 @@ const IncidentCard = ({ incident, onStatusUpdate, onViewDetails, onOpenAI, getSt
         <span className={`status-badge ${getStatusColor(status)}`}>{status}</span>
         
         <div className="action-buttons">
-          {/* AI Button on Card */}
           <button className="btn-ai-small" onClick={(e) => { e.stopPropagation(); onOpenAI(e, incident); }} title="Analyze with AI">
             <Brain size={16} />
           </button>
@@ -399,11 +352,9 @@ const IncidentCard = ({ incident, onStatusUpdate, onViewDetails, onOpenAI, getSt
           )}
           
           {status === 'In Progress' && (
-            <>
-              <button className="btn-resolve" onClick={() => onStatusUpdate(incident._id, 'Resolved')}>
-                Resolve
-              </button>
-            </>
+            <button className="btn-resolve" onClick={() => onStatusUpdate(incident._id, 'Resolved')}>
+              Resolve
+            </button>
           )}
         </div>
       </div>
@@ -444,7 +395,7 @@ const IncidentDetailModal = ({ incident, onClose, onStatusUpdate, onOpenAI, getS
             <div className="detail-section">
               <h3>Attack Chain ({relatedAlerts.length} Events)</h3>
               <div className="timeline-container">
-                 {relatedAlerts.map((alert, idx) => (
+                 {relatedAlerts.map((alert) => (
                     <div key={alert._id} className="timeline-item">
                         <div className="timeline-time">{new Date(alert.timestamp).toLocaleTimeString()}</div>
                         <div className="timeline-content">

@@ -917,3 +917,84 @@
   color: var(--accent-primary, #00bcd4);
   font-size: 14px;
 }
+/* ADD THIS TO THE END OF Incidents.css */
+
+/* AI Analyst Button Styles - NEW! */
+.ai-btn {
+  background: linear-gradient(135deg, #00bcd4, #0097a7) !important;
+  color: white !important;
+  border: none !important;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  transition: all 0.3s ease !important;
+  box-shadow: 0 4px 12px rgba(0, 188, 212, 0.3);
+}
+
+.ai-btn:hover {
+  background: linear-gradient(135deg, #00d4e6, #00bcd4) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 188, 212, 0.4) !important;
+}
+
+/* Update action buttons layout */
+.incident-actions,
+.alert-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.action-btn {
+  flex: 1;
+  min-width: 120px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.resolve-btn {
+  background: linear-gradient(135deg, #00C851, #007E33);
+  color: white;
+}
+
+.resolve-btn:hover {
+  background: linear-gradient(135deg, #00E660, #00C851);
+  transform: translateY(-2px);
+}
+
+.cascade-btn {
+  background: linear-gradient(135deg, #ffbb33, #ff8800);
+  color: white;
+}
+
+.cascade-btn:hover {
+  background: linear-gradient(135deg, #ffd24d, #ffbb33);
+  transform: translateY(-2px);
+}
+
+/* Ensure AI panel doesn't overlap content */
+.incidents-page {
+  position: relative;
+  transition: margin-right 0.3s ease;
+}
+
+/* Add some breathing room when AI panel is open */
+body:has(.ai-analyst-panel) .incidents-page {
+  margin-right: 450px;
+}
+
+@media (max-width: 1400px) {
+  body:has(.ai-analyst-panel) .incidents-page {
+    margin-right: 0;
+  }
+}

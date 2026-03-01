@@ -1,8 +1,8 @@
-// src/pages/LiveFeed.js - Live Monitor with AI Integration
+// src/pages/LiveFeed.js - Live Monitor with WORKING AI Integration
 import React, { useState, useEffect, useRef } from 'react';
 import io from 'socket.io-client';
-import { Activity, Brain, Shield, Zap, Search, Pause, Play } from 'lucide-react';
-import AIAnalyst from '../components/AIAnalyst';
+import { Activity, Brain, Search, Pause, Play } from 'lucide-react';
+import AlertAIAnalyst from '../components/AlertAIAnalyst'; // UPDATED IMPORT
 import './LiveFeed.css';
 
 const SOCKET_SERVER_URL = "http://localhost:5000";
@@ -18,17 +18,15 @@ const LiveFeed = () => {
   const [aiAnalystAlert, setAIAnalystAlert] = useState(null);
   const [isAIMinimized, setIsAIMinimized] = useState(false);
 
-  // Refs for socket management
   const socketRef = useRef();
-
   const token = localStorage.getItem('token');
 
-  // 1. Initial Fetch
+  // Initial Fetch
   useEffect(() => {
     fetchAlerts();
   }, []);
 
-  // 2. Socket Connection
+  // Socket Connection
   useEffect(() => {
     socketRef.current = io(SOCKET_SERVER_URL);
 
@@ -117,9 +115,9 @@ const LiveFeed = () => {
         )}
       </div>
 
-      {/* AI Analyst Panel (Overlay) */}
+      {/* AI Analyst Panel */}
       {showAIAnalyst && aiAnalystAlert && (
-        <AIAnalyst
+        <AlertAIAnalyst
           alert={aiAnalystAlert}
           onClose={() => setShowAIAnalyst(false)}
           isMinimized={isAIMinimized}
@@ -130,7 +128,7 @@ const LiveFeed = () => {
   );
 };
 
-// --- Sub-Component: Individual Alert Item ---
+// Alert Item Component
 const AlertItem = ({ alert, onAskAI }) => {
   const getSeverityColor = (sev) => {
     switch(sev) {
@@ -151,7 +149,6 @@ const AlertItem = ({ alert, onAskAI }) => {
 
   return (
     <div className={`feed-item severity-${alert.severity.toLowerCase()}`}>
-      {/* Left Stripe & Icon */}
       <div className="feed-item-status" style={{ background: getSeverityColor(alert.severity) }}></div>
       
       <div className="feed-item-content">
@@ -166,7 +163,6 @@ const AlertItem = ({ alert, onAskAI }) => {
         <div className="feed-main-info">
           <h3 className="feed-type">{alert.alertType}</h3>
           
-          {/* Target/IP Display */}
           <div className="feed-target">
             {(alert.details?.ip_address || alert.details?.source_ip) && (
               <code className="ip-tag">
@@ -180,7 +176,7 @@ const AlertItem = ({ alert, onAskAI }) => {
         </div>
       </div>
 
-      {/* Right Actions - AI BUTTON IS HERE */}
+      {/* AI Button */}
       <div className="feed-item-actions">
         <button className="btn-quick-ai" onClick={onAskAI} title="Analyze with AI">
           <Brain size={20} />
