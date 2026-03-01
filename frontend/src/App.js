@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import io from 'socket.io-client';
 import './App.css';
+import './styles/mobile-responsive.css';
 
 // --- Pages ---
 import Login from './pages/Login';

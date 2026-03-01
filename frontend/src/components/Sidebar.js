@@ -1,11 +1,11 @@
-// src/components/Sidebar.js - WITH AI ASSISTANT FOR ALL USERS
+// src/components/Sidebar.js - MOBILE RESPONSIVE with Hamburger Menu
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   Shield, LayoutDashboard, Activity, AlertOctagon, 
-  Search, Users, User, Power, Target, Key, Brain
+  Search, Users, User, Power, Target, Key, Brain, Menu, X
 } from 'lucide-react';
-import GeneralAIChat from './GeneralAIChat'; // NEW!
+import GeneralAIChat from './GeneralAIChat';
 import './Sidebar.css';
 
 const Sidebar = ({ isConnected }) => {
@@ -13,10 +13,13 @@ const Sidebar = ({ isConnected }) => {
   const navigate = useNavigate();
   const role = localStorage.getItem('role');
   const username = localStorage.getItem('username');
+  
+  // Mobile menu state
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
-  const [showAIChat, setShowAIChat] = useState(false); // NEW!
-  const [isAIMinimized, setIsAIMinimized] = useState(false); // NEW!
+  const [showAIChat, setShowAIChat] = useState(false);
+  const [isAIMinimized, setIsAIMinimized] = useState(false);
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: '',
     newPassword: '',
@@ -75,9 +78,32 @@ const Sidebar = ({ isConnected }) => {
     return location.pathname === path ? 'active' : '';
   };
 
+  // Close mobile menu when navigating
+  const handleNavClick = () => {
+    setIsMobileMenuOpen(false);
+  };
+
   return (
     <>
-      <aside className="sidebar">
+      {/* MOBILE HAMBURGER BUTTON */}
+      <button 
+        className="mobile-menu-toggle"
+        onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+        aria-label="Toggle menu"
+      >
+        {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+      </button>
+
+      {/* MOBILE OVERLAY */}
+      {isMobileMenuOpen && (
+        <div 
+          className="mobile-overlay"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+
+      {/* SIDEBAR */}
+      <aside className={`sidebar ${isMobileMenuOpen ? 'mobile-open' : ''}`}>
         {/* Logo */}
         <div className="sidebar-logo">
           <Shield size={32} color="#00bcd4" />
@@ -107,29 +133,29 @@ const Sidebar = ({ isConnected }) => {
           {role === 'admin' && (
             <>
               <div className="nav-section-title">ADMINISTRATION</div>
-              <Link to="/admin-dashboard" className={`nav-item ${isActive('/admin-dashboard')}`}>
+              <Link to="/admin-dashboard" className={`nav-item ${isActive('/admin-dashboard')}`} onClick={handleNavClick}>
                 <LayoutDashboard size={20} />
                 <span>Admin Overview</span>
               </Link>
-              <Link to="/users" className={`nav-item ${isActive('/users')}`}>
+              <Link to="/users" className={`nav-item ${isActive('/users')}`} onClick={handleNavClick}>
                 <Users size={20} />
                 <span>User Management</span>
               </Link>
               
               <div className="nav-section-title">OPERATIONS</div>
-              <Link to="/dashboard" className={`nav-item ${isActive('/dashboard')}`}>
+              <Link to="/dashboard" className={`nav-item ${isActive('/dashboard')}`} onClick={handleNavClick}>
                 <LayoutDashboard size={20} />
                 <span>Ops Dashboard</span>
               </Link>
-              <Link to="/feed" className={`nav-item ${isActive('/feed')}`}>
+              <Link to="/feed" className={`nav-item ${isActive('/feed')}`} onClick={handleNavClick}>
                 <Activity size={20} />
                 <span>Live Feed</span>
               </Link>
-              <Link to="/incidents" className={`nav-item ${isActive('/incidents')}`}>
+              <Link to="/incidents" className={`nav-item ${isActive('/incidents')}`} onClick={handleNavClick}>
                 <AlertOctagon size={20} />
                 <span>War Room</span>
               </Link>
-              <Link to="/forensics" className={`nav-item ${isActive('/forensics')}`}>
+              <Link to="/forensics" className={`nav-item ${isActive('/forensics')}`} onClick={handleNavClick}>
                 <Search size={20} />
                 <span>Forensics</span>
               </Link>
@@ -140,23 +166,23 @@ const Sidebar = ({ isConnected }) => {
           {role === 'senior' && (
             <>
               <div className="nav-section-title">SENIOR ANALYST</div>
-              <Link to="/senior-dashboard" className={`nav-item ${isActive('/senior-dashboard')}`}>
+              <Link to="/senior-dashboard" className={`nav-item ${isActive('/senior-dashboard')}`} onClick={handleNavClick}>
                 <Target size={20} />
                 <span>My Dashboard</span>
               </Link>
-              <Link to="/dashboard" className={`nav-item ${isActive('/dashboard')}`}>
+              <Link to="/dashboard" className={`nav-item ${isActive('/dashboard')}`} onClick={handleNavClick}>
                 <LayoutDashboard size={20} />
                 <span>Ops Dashboard</span>
               </Link>
-              <Link to="/feed" className={`nav-item ${isActive('/feed')}`}>
+              <Link to="/feed" className={`nav-item ${isActive('/feed')}`} onClick={handleNavClick}>
                 <Activity size={20} />
                 <span>Live Feed</span>
               </Link>
-              <Link to="/incidents" className={`nav-item ${isActive('/incidents')}`}>
+              <Link to="/incidents" className={`nav-item ${isActive('/incidents')}`} onClick={handleNavClick}>
                 <AlertOctagon size={20} />
                 <span>War Room</span>
               </Link>
-              <Link to="/forensics" className={`nav-item ${isActive('/forensics')}`}>
+              <Link to="/forensics" className={`nav-item ${isActive('/forensics')}`} onClick={handleNavClick}>
                 <Search size={20} />
                 <span>Forensics</span>
               </Link>
@@ -167,20 +193,21 @@ const Sidebar = ({ isConnected }) => {
           {role === 'employee' && (
             <>
               <div className="nav-section-title">MY WORKSPACE</div>
-              <Link to="/my-status" className={`nav-item ${isActive('/my-status')}`}>
+              <Link to="/my-status" className={`nav-item ${isActive('/my-status')}`} onClick={handleNavClick}>
                 <Shield size={20} />
                 <span>My Security Status</span>
               </Link>
             </>
           )}
 
-          {/* AI ASSISTANT - NEW! AVAILABLE TO ALL ROLES */}
+          {/* AI ASSISTANT */}
           <div className="nav-section-title">AI ASSISTANT</div>
           <button 
             className={`nav-item nav-button ${showAIChat && !isAIMinimized ? 'active' : ''}`}
             onClick={() => {
               setShowAIChat(true);
               setIsAIMinimized(false);
+              setIsMobileMenuOpen(false); // Close mobile menu
             }}
           >
             <Brain size={20} />
@@ -192,7 +219,10 @@ const Sidebar = ({ isConnected }) => {
           <div className="nav-section-title">ACCOUNT</div>
           <button 
             className="nav-item nav-button"
-            onClick={() => setShowChangePassword(true)}
+            onClick={() => {
+              setShowChangePassword(true);
+              setIsMobileMenuOpen(false);
+            }}
           >
             <Key size={20} />
             <span>Change Password</span>
@@ -285,7 +315,7 @@ const Sidebar = ({ isConnected }) => {
         )}
       </aside>
 
-      {/* AI CHAT PANEL - NEW! */}
+      {/* AI CHAT PANEL */}
       {showAIChat && (
         <GeneralAIChat
           onClose={() => setShowAIChat(false)}
