@@ -1,6 +1,6 @@
 // src/pages/Dashboard.js - FIXED with proper authentication
 import React, { useEffect, useState, useCallback } from 'react';
-const API_BASE = process.env.REACT_APP_BACKEND_URL || "http://localhost:5000";// Ensure this is set in your .env file
+
 import { 
   PieChart, Pie, Cell, 
   BarChart, Bar, 
@@ -12,7 +12,7 @@ import {
   ShieldAlert, Activity, Server, AlertTriangle, Zap
 } from 'lucide-react';
 import './Dashboard.css';
-
+const API_BASE = process.env.REACT_APP_BACKEND_URL || "http://localhost:5000";// Ensure this is set in your .env file
 const SEVERITY_COLORS = {
   'Critical': '#ff4444',
   'High': '#ff8800',
