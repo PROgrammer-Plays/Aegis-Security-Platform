@@ -27,7 +27,7 @@ import Sidebar from './components/Sidebar';
 import Toast from './components/Toast';
 import ChangePasswordModal from './components/ChangePasswordModal'; // NEW!
 
-const SOCKET_SERVER_URL = process.env.REACT_APP_BACKEND_URL || "http://localhost:5000;
+const SOCKET_SERVER_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000';
 
 function App() {
   const [token, setToken] = useState(localStorage.getItem('token'));
